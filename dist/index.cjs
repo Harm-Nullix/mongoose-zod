@@ -65,33 +65,16 @@ var genTimestampsSchema = (createdAtField = "createdAt", updatedAtField = "updat
   };
   return schema;
 };
-var noCastFn = (value) => value;
 var MongooseZodBoolean = class extends M.SchemaTypes.Boolean {
-  constructor() {
-    super(...arguments);
-    this.cast = noCastFn;
-  }
 };
 MongooseZodBoolean.schemaName = "MongooseZodBoolean";
 var MongooseZodDate = class extends M.SchemaTypes.Date {
-  constructor() {
-    super(...arguments);
-    this.cast = noCastFn;
-  }
 };
 MongooseZodDate.schemaName = "MongooseZodDate";
 var MongooseZodNumber = class extends M.SchemaTypes.Number {
-  constructor() {
-    super(...arguments);
-    this.cast = noCastFn;
-  }
 };
 MongooseZodNumber.schemaName = "MongooseZodNumber";
 var MongooseZodString = class extends M.SchemaTypes.String {
-  constructor() {
-    super(...arguments);
-    this.cast = noCastFn;
-  }
 };
 MongooseZodString.schemaName = "MongooseZodString";
 var registerCustomMongooseZodTypes = () => {
