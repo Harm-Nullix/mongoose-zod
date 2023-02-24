@@ -54,26 +54,26 @@ export type MongooseSchemaTypeParameters<
     }[Parameter]
   : {};
 
-// const noCastFn = (value: any) => value;
+const noCastFn = (value: any) => value;
 
 export class MongooseZodBoolean extends M.SchemaTypes.Boolean {
   static schemaName = 'MongooseZodBoolean' as 'Boolean';
-  // cast = noCastFn;
+  cast = noCastFn;
 }
 
 export class MongooseZodDate extends M.SchemaTypes.Date {
   static schemaName = 'MongooseZodDate' as 'Date';
-  // cast = noCastFn;
+  cast = noCastFn;
 }
 
 export class MongooseZodNumber extends M.SchemaTypes.Number {
   static schemaName = 'MongooseZodNumber' as 'Number';
-  // cast = noCastFn;
+  cast = noCastFn;
 }
 
 export class MongooseZodString extends M.SchemaTypes.String {
   static schemaName = 'MongooseZodString' as 'String';
-  // cast = noCastFn;
+  cast = noCastFn;
 }
 
 export const registerCustomMongooseZodTypes = (): void => {
