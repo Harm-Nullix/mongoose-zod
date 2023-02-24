@@ -32,15 +32,15 @@ declare module 'zod' {
         mongooseTypeOptions<T extends ZodSchema<any>>(this: T, options: SchemaTypeOptions<T['_output']>): T;
     }
     interface ZodObject<T extends z.ZodRawShape, UnknownKeys extends 'passthrough' | 'strict' | 'strip' = 'strip', Catchall extends z.ZodTypeAny = z.ZodTypeAny, Output = z.objectOutputType<T, Catchall>, Input = z.objectInputType<T, Catchall>> {
-        mongoose: <O extends ZodObject<T, UnknownKeys, Catchall, Output, Input>, TInstanceMethods extends {} = {}, QueryHelpers extends {} = {}, TStaticMethods extends {} = {}, TVirtuals extends {} = {}>(this: O, metadata?: MongooseMetadata<O['_output'], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>) => ZodMongoose<O, O['_output'], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>;
+        mongoose: <ZO extends ZodObject<T, UnknownKeys, Catchall, Output, Input>, TInstanceMethods extends {} = {}, QueryHelpers extends {} = {}, TStaticMethods extends {} = {}, TVirtuals extends {} = {}>(this: ZO, metadata?: MongooseMetadata<ZO['_output'], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>) => ZodMongoose<ZO, ZO['_output'], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>;
     }
 }
-declare const toZodMongooseSchema: (zObject: ZodObject<any>, metadata?: {}) => ZodMongoose<ZodObject<any, "strip", z.ZodTypeAny, {
+declare const toZodMongooseSchema: <ZO extends ZodObject<any, "strip", z.ZodTypeAny, {
     [x: string]: any;
 }, {
     [x: string]: any;
-}>, unknown, {}, {}, {}, {}>;
-declare const addMongooseTypeOptions: (zObject: z.ZodType, options: SchemaTypeOptions<any, any> | undefined) => z.ZodType<any, z.ZodTypeDef, any>;
+}>, TInstanceMethods extends {} = {}, QueryHelpers extends {} = {}, TStaticMethods extends {} = {}, TVirtuals extends {} = {}>(zObject: ZO, metadata?: MongooseMetadata<ZO["_output"], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>) => ZodMongoose<ZO, ZO["_output"], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>;
+declare const addMongooseTypeOptions: <T extends z.ZodType<any, z.ZodTypeDef, any>>(zObject: T, options: SchemaTypeOptions<T["_output"], any>) => T;
 declare module 'mongoose' {
     interface MZValidateFn<T, ThisType> {
         (this: ThisType, value: T): boolean;
@@ -83,11 +83,19 @@ interface DisableablePlugins {
     leanDefaults?: boolean;
     leanGetters?: boolean;
 }
-declare const toMongooseSchema: <Schema extends ZodMongoose<any, any, {}, {}, {}, {}>>(rootZodSchema: Schema, options?: {
+interface ToMongooseSchemaOptions {
     disablePlugins?: DisableablePlugins | true;
     unknownKeys?: UnknownKeysHandling;
-}) => M.Schema<z$1.TypeOf<Schema>, any, MongooseSchemaTypeParameters<Schema, "InstanceMethods">, MongooseSchemaTypeParameters<Schema, "QueryHelpers">, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">>, MongooseSchemaTypeParameters<Schema, "TStaticMethods">, "type", M.ObtainDocumentType<any, z$1.TypeOf<Schema>, "type">>;
+}
+interface SetupOptions {
+    z?: typeof z | null;
+    defaultToMongooseSchemaOptions?: ToMongooseSchemaOptions;
+}
+
+declare const toMongooseSchema: <Schema extends ZodMongoose<any, any, {}, {}, {}, {}>>(rootZodSchema: Schema, options?: ToMongooseSchemaOptions) => M.Schema<z$1.TypeOf<Schema>, any, MongooseSchemaTypeParameters<Schema, "InstanceMethods">, MongooseSchemaTypeParameters<Schema, "QueryHelpers">, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">>, MongooseSchemaTypeParameters<Schema, "TStaticMethods">, "type", M.ObtainDocumentType<any, z$1.TypeOf<Schema>, "type">>;
 
 declare const mongooseZodCustomType: <T extends "ObjectId" | "Array" | "Buffer" | "Decimal128" | "DocumentArray" | "Map" | "Subdocument">(typeName: T, params?: Parameters<ZodTypeAny['refine']>[1]) => z.ZodType<InstanceType<T extends "Buffer" ? BufferConstructor : (typeof M.Types)[T]>, z.ZodTypeDef, InstanceType<T extends "Buffer" ? BufferConstructor : (typeof M.Types)[T]>>;
 
-export { MongooseSchemaOptionsSymbol, MongooseTypeOptionsSymbol, MongooseZodError, UnknownKeysHandling, ZodMongoose, addMongooseTypeOptions, bufferMongooseGetter, genTimestampsSchema, mongooseZodCustomType, toMongooseSchema, toZodMongooseSchema };
+declare const setup: (options?: SetupOptions) => void;
+
+export { DisableablePlugins, MongooseSchemaOptionsSymbol, MongooseTypeOptionsSymbol, MongooseZodError, SetupOptions, ToMongooseSchemaOptions, UnknownKeysHandling, ZodMongoose, addMongooseTypeOptions, bufferMongooseGetter, genTimestampsSchema, mongooseZodCustomType, setup, toMongooseSchema, toZodMongooseSchema };
