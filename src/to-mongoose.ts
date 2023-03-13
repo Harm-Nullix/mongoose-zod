@@ -22,10 +22,6 @@ const {Mixed: MongooseMixed} = M.Schema.Types;
 
 registerCustomMongooseZodTypes();
 
-const mlvPlugin = tryImportModule('mongoose-lean-virtuals', import.meta);
-const mldPlugin = tryImportModule('mongoose-lean-defaults', import.meta);
-const mlgPlugin = tryImportModule('mongoose-lean-getters', import.meta);
-
 // eslint-disable-next-line @typescript-eslint/ban-types
 const getFixedOptionFn = (fn: Function) =>
   function (this: unknown, ...args: any[]) {
@@ -370,6 +366,10 @@ export const toMongooseSchema = <Schema extends ZodMongoose<any, any>>(
   const metadata = rootZodSchema._def;
   const schemaOptionsFromField = metadata.innerType._def?.[MongooseSchemaOptionsSymbol];
   const schemaOptions = metadata?.mongoose.schemaOptions;
+
+  const mlvPlugin = tryImportModule('mongoose-lean-virtuals', import.meta);
+  const mldPlugin = tryImportModule('mongoose-lean-defaults', import.meta);
+  const mlgPlugin = tryImportModule('mongoose-lean-getters', import.meta);
 
   const addMLVPlugin = mlvPlugin && !isPluginDisabled('leanVirtuals', dp);
   const addMLDPlugin = mldPlugin && !isPluginDisabled('leanDefaults', dp);

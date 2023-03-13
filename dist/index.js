@@ -194,9 +194,6 @@ var mongooseZodCustomType = (typeName, params) => {
 // src/to-mongoose.ts
 var { Mixed: MongooseMixed } = M.Schema.Types;
 registerCustomMongooseZodTypes();
-var mlvPlugin = tryImportModule("mongoose-lean-virtuals", import.meta);
-var mldPlugin = tryImportModule("mongoose-lean-defaults", import.meta);
-var mlgPlugin = tryImportModule("mongoose-lean-getters", import.meta);
 var getFixedOptionFn = (fn) => function(...args) {
   const thisFixed = this && this instanceof M.Document ? this : void 0;
   return fn.apply(thisFixed, args);
@@ -450,6 +447,9 @@ var toMongooseSchema = (rootZodSchema, options = {}) => {
   const metadata = rootZodSchema._def;
   const schemaOptionsFromField = (_b = metadata.innerType._def) == null ? void 0 : _b[MongooseSchemaOptionsSymbol];
   const schemaOptions = metadata == null ? void 0 : metadata.mongoose.schemaOptions;
+  const mlvPlugin = tryImportModule("mongoose-lean-virtuals", import.meta);
+  const mldPlugin = tryImportModule("mongoose-lean-defaults", import.meta);
+  const mlgPlugin = tryImportModule("mongoose-lean-getters", import.meta);
   const addMLVPlugin = mlvPlugin && !isPluginDisabled("leanVirtuals", dp);
   const addMLDPlugin = mldPlugin && !isPluginDisabled("leanDefaults", dp);
   const addMLGPlugin = mlgPlugin && !isPluginDisabled("leanGetters", dp);

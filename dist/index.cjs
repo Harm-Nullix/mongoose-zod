@@ -195,9 +195,6 @@ var mongooseZodCustomType = (typeName, params) => {
 // src/to-mongoose.ts
 var { Mixed: MongooseMixed } = M.Schema.Types;
 registerCustomMongooseZodTypes();
-var mlvPlugin = tryImportModule("mongoose-lean-virtuals", ({ url: (typeof document === 'undefined' ? new (require('u' + 'rl').URL)('file:' + __filename).href : (document.currentScript && document.currentScript.src || new URL('out.js', document.baseURI).href)) }));
-var mldPlugin = tryImportModule("mongoose-lean-defaults", ({ url: (typeof document === 'undefined' ? new (require('u' + 'rl').URL)('file:' + __filename).href : (document.currentScript && document.currentScript.src || new URL('out.js', document.baseURI).href)) }));
-var mlgPlugin = tryImportModule("mongoose-lean-getters", ({ url: (typeof document === 'undefined' ? new (require('u' + 'rl').URL)('file:' + __filename).href : (document.currentScript && document.currentScript.src || new URL('out.js', document.baseURI).href)) }));
 var getFixedOptionFn = (fn) => function(...args) {
   const thisFixed = this && this instanceof M.Document ? this : void 0;
   return fn.apply(thisFixed, args);
@@ -451,6 +448,9 @@ var toMongooseSchema = (rootZodSchema, options = {}) => {
   const metadata = rootZodSchema._def;
   const schemaOptionsFromField = (_b = metadata.innerType._def) == null ? void 0 : _b[MongooseSchemaOptionsSymbol];
   const schemaOptions = metadata == null ? void 0 : metadata.mongoose.schemaOptions;
+  const mlvPlugin = tryImportModule("mongoose-lean-virtuals", ({ url: (typeof document === 'undefined' ? new (require('u' + 'rl').URL)('file:' + __filename).href : (document.currentScript && document.currentScript.src || new URL('out.js', document.baseURI).href)) }));
+  const mldPlugin = tryImportModule("mongoose-lean-defaults", ({ url: (typeof document === 'undefined' ? new (require('u' + 'rl').URL)('file:' + __filename).href : (document.currentScript && document.currentScript.src || new URL('out.js', document.baseURI).href)) }));
+  const mlgPlugin = tryImportModule("mongoose-lean-getters", ({ url: (typeof document === 'undefined' ? new (require('u' + 'rl').URL)('file:' + __filename).href : (document.currentScript && document.currentScript.src || new URL('out.js', document.baseURI).href)) }));
   const addMLVPlugin = mlvPlugin && !isPluginDisabled("leanVirtuals", dp);
   const addMLDPlugin = mldPlugin && !isPluginDisabled("leanDefaults", dp);
   const addMLGPlugin = mlgPlugin && !isPluginDisabled("leanGetters", dp);
