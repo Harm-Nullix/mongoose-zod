@@ -1,9 +1,10 @@
-import z5, { z } from 'zod';
+import { zodInstanceofOriginalClasses } from './chunk-ZFMQKE3E.js';
+export { mongooseZodCustomType } from './chunk-ZFMQKE3E.js';
+import z4, { z } from 'zod';
 export { z } from 'zod';
 import M, { Schema } from 'mongoose';
 import { createRequire } from 'module';
 
-// src/index.ts
 var MongooseTypeOptionsSymbol = Symbol.for("MongooseTypeOptions");
 var MongooseSchemaOptionsSymbol = Symbol.for("MongooseSchemaOptions");
 var ZodMongoose = class extends z.ZodType {
@@ -181,14 +182,6 @@ var unwrapZodSchema = (schema, options = {}, _features = {}) => {
     });
   }
   return { schema, features: _features };
-};
-var zodInstanceofOriginalClasses = /* @__PURE__ */ new WeakMap();
-var mongooseZodCustomType = (typeName, params) => {
-  const instanceClass = typeName === "Buffer" ? Buffer : M.Types[typeName];
-  const typeClass = M.Schema.Types[typeName];
-  const result = z.instanceof(instanceClass, params);
-  zodInstanceofOriginalClasses.set(result._def.schema, typeClass);
-  return result;
 };
 
 // src/to-mongoose.ts
@@ -407,7 +400,7 @@ var addMongooseSchemaFields = (zodSchema, monSchema, context) => {
     var _a2;
     let schemaToValidate = ((_a2 = schemaFeatures.array) == null ? void 0 : _a2.originalArraySchema) || zodSchemaFinal;
     if (isZodType(schemaToValidate, "ZodObject")) {
-      schemaToValidate = z5.preprocess((obj) => {
+      schemaToValidate = z4.preprocess((obj) => {
         if (!obj || typeof obj !== "object") {
           return obj;
         }
@@ -490,4 +483,4 @@ var toMongooseSchema = (rootZodSchema, options = {}) => {
 addMongooseToZodPrototype(z);
 addMongooseTypeOptionsToZodPrototype(z);
 
-export { MongooseSchemaOptionsSymbol, MongooseTypeOptionsSymbol, MongooseZodError, ZodMongoose, addMongooseTypeOptions, bufferMongooseGetter, genTimestampsSchema, mongooseZodCustomType, setup, toMongooseSchema, toZodMongooseSchema };
+export { MongooseSchemaOptionsSymbol, MongooseTypeOptionsSymbol, MongooseZodError, ZodMongoose, addMongooseTypeOptions, bufferMongooseGetter, genTimestampsSchema, setup, toMongooseSchema, toZodMongooseSchema };

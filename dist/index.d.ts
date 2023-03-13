@@ -1,6 +1,7 @@
-import z$1, { z, ZodObject, ZodTypeAny } from 'zod';
+import z$1, { z, ZodObject } from 'zod';
 export { z } from 'zod';
 import M, { SchemaTypeOptions, SchemaOptions } from 'mongoose';
+export { mongooseZodCustomType } from './zodInstances.service.js';
 
 declare class MongooseZodError extends Error {
 }
@@ -94,8 +95,6 @@ interface SetupOptions {
 
 declare const toMongooseSchema: <Schema extends ZodMongoose<any, any, {}, {}, {}, {}>>(rootZodSchema: Schema, options?: ToMongooseSchemaOptions) => M.Schema<z$1.TypeOf<Schema>, any, MongooseSchemaTypeParameters<Schema, "InstanceMethods">, MongooseSchemaTypeParameters<Schema, "QueryHelpers">, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">>, MongooseSchemaTypeParameters<Schema, "TStaticMethods">, "type", M.ObtainDocumentType<any, z$1.TypeOf<Schema>, "type">>;
 
-declare const mongooseZodCustomType: <T extends "ObjectId" | "Array" | "Buffer" | "Decimal128" | "DocumentArray" | "Map" | "Subdocument">(typeName: T, params?: Parameters<ZodTypeAny['refine']>[1]) => z.ZodType<InstanceType<T extends "Buffer" ? BufferConstructor : (typeof M.Types)[T]>, z.ZodTypeDef, InstanceType<T extends "Buffer" ? BufferConstructor : (typeof M.Types)[T]>>;
-
 declare const setup: (options?: SetupOptions) => void;
 
-export { DisableablePlugins, MongooseSchemaOptionsSymbol, MongooseTypeOptionsSymbol, MongooseZodError, SetupOptions, ToMongooseSchemaOptions, UnknownKeysHandling, ZodMongoose, addMongooseTypeOptions, bufferMongooseGetter, genTimestampsSchema, mongooseZodCustomType, setup, toMongooseSchema, toZodMongooseSchema };
+export { DisableablePlugins, MongooseSchemaOptionsSymbol, MongooseTypeOptionsSymbol, MongooseZodError, SetupOptions, ToMongooseSchemaOptions, UnknownKeysHandling, ZodMongoose, addMongooseTypeOptions, bufferMongooseGetter, genTimestampsSchema, setup, toMongooseSchema, toZodMongooseSchema };
