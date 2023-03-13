@@ -184,6 +184,13 @@ var unwrapZodSchema = (schema, options = {}, _features = {}) => {
   return { schema, features: _features };
 };
 var zodInstanceofOriginalClasses = /* @__PURE__ */ new WeakMap();
+var mongooseZodCustomType = (typeName, params) => {
+  const instanceClass = typeName === "Buffer" ? Buffer : M.Types[typeName];
+  const typeClass = M.Schema.Types[typeName];
+  const result = z5.z.instanceof(instanceClass, params);
+  zodInstanceofOriginalClasses.set(result._def.schema, typeClass);
+  return result;
+};
 
 // src/to-mongoose.ts
 var { Mixed: MongooseMixed } = M.Schema.Types;
@@ -495,6 +502,7 @@ exports.ZodMongoose = ZodMongoose;
 exports.addMongooseTypeOptions = addMongooseTypeOptions;
 exports.bufferMongooseGetter = bufferMongooseGetter;
 exports.genTimestampsSchema = genTimestampsSchema;
+exports.mongooseZodCustomType = mongooseZodCustomType;
 exports.setup = setup;
 exports.toMongooseSchema = toMongooseSchema;
 exports.toZodMongooseSchema = toZodMongooseSchema;
