@@ -15,12 +15,8 @@ import {
 import type {DisableablePlugins, ToMongooseSchemaOptions, UnknownKeysHandling} from './mz-types.js';
 import {setupState} from './setup.js';
 import {getValidEnumValues, tryImportModule} from './utils.js';
-import {
-  SchemaFeatures,
-  isZodType,
-  unwrapZodSchema,
-  zodInstanceofOriginalClasses,
-} from './zod-helpers.js';
+import {SchemaFeatures, isZodType, unwrapZodSchema} from './zod-helpers.js';
+import {zodInstanceofOriginalClasses} from './zodInstances.service.js';
 
 const {Mixed: MongooseMixed} = M.Schema.Types;
 const originalMongooseLean = M.Query.prototype.lean;

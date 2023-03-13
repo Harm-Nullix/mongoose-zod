@@ -13,7 +13,7 @@ export type {
   ToMongooseSchemaOptions,
   UnknownKeysHandling,
 } from './mz-types.js';
-export {mongooseZodCustomType} from './zod-helpers.js';
+export {mongooseZodCustomType} from './zodInstances.service.js';
 export {
   MongooseSchemaOptionsSymbol,
   MongooseTypeOptionsSymbol,
