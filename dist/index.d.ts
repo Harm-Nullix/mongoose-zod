@@ -1,7 +1,6 @@
 import z$1, { z, ZodObject } from 'zod';
 export { z } from 'zod';
 import M, { SchemaTypeOptions, SchemaOptions } from 'mongoose';
-export { mongooseZodCustomType } from './zodInstances.service.js';
 
 declare class MongooseZodError extends Error {
 }

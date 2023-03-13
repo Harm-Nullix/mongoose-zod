@@ -1,5 +1,4 @@
 import { zodInstanceofOriginalClasses } from './chunk-ZFMQKE3E.js';
-export { mongooseZodCustomType } from './chunk-ZFMQKE3E.js';
 import z4, { z } from 'zod';
 export { z } from 'zod';
 import M, { Schema } from 'mongoose';
