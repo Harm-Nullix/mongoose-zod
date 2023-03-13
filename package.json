@@ -37,7 +37,7 @@
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    "./zodInstances": "./src/zodInstances.service.ts"
+    "./zodInstances": "./dist/zodInstances.service"
   },
   "files": [
     "dist"
