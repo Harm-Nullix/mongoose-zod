@@ -193,7 +193,6 @@ var mongooseZodCustomType = (typeName, params) => {
 
 // src/to-mongoose.ts
 var { Mixed: MongooseMixed } = M.Schema.Types;
-var originalMongooseLean = M.Query.prototype.lean;
 registerCustomMongooseZodTypes();
 var mlvPlugin = tryImportModule("mongoose-lean-virtuals", import.meta);
 var mldPlugin = tryImportModule("mongoose-lean-defaults", import.meta);
@@ -413,7 +412,7 @@ var addMongooseSchemaFields = (zodSchema, monSchema, context) => {
         }
         let objMaybeCopy = obj;
         for (const [k, v] of Object.entries(objMaybeCopy)) {
-          if (v instanceof M.mongo.Binary) {
+          if (M.mongo && v instanceof M.mongo.Binary) {
             if (objMaybeCopy === obj) {
               objMaybeCopy = { ...obj };
             }
@@ -464,7 +463,7 @@ var toMongooseSchema = (rootZodSchema, options = {}) => {
       ...schemaOptions,
       query: {
         lean(leanOptions) {
-          return originalMongooseLean.call(
+          return M.Query.prototype.lean.call(
             this,
             typeof leanOptions === "object" || leanOptions == null ? {
               ...addMLVPlugin && { virtuals: true },

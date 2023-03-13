@@ -19,7 +19,6 @@ import {SchemaFeatures, isZodType, unwrapZodSchema} from './zod-helpers.js';
 import {zodInstanceofOriginalClasses} from './zodInstances.service.js';
 
 const {Mixed: MongooseMixed} = M.Schema.Types;
-const originalMongooseLean = M.Query.prototype.lean;
 
 registerCustomMongooseZodTypes();
 
@@ -314,7 +313,7 @@ const addMongooseSchemaFields = (
         // Do not shallow-copy the object until we find Binary we need to unwrap
         let objMaybeCopy = obj as Record<string, unknown>;
         for (const [k, v] of Object.entries(objMaybeCopy)) {
-          if (v instanceof M.mongo.Binary) {
+          if (M.mongo && v instanceof M.mongo.Binary) {
             if (objMaybeCopy === obj) {
               objMaybeCopy = {...obj};
             }
@@ -393,7 +392,7 @@ export const toMongooseSchema = <Schema extends ZodMongoose<any, any>>(
       ...schemaOptions,
       query: {
         lean(leanOptions?: any) {
-          return originalMongooseLean.call(
+          return M.Query.prototype.lean.call(
             this,
             typeof leanOptions === 'object' || leanOptions == null
               ? {

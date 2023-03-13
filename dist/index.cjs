@@ -194,7 +194,6 @@ var mongooseZodCustomType = (typeName, params) => {
 
 // src/to-mongoose.ts
 var { Mixed: MongooseMixed } = M.Schema.Types;
-var originalMongooseLean = M.Query.prototype.lean;
 registerCustomMongooseZodTypes();
 var mlvPlugin = tryImportModule("mongoose-lean-virtuals", ({ url: (typeof document === 'undefined' ? new (require('u' + 'rl').URL)('file:' + __filename).href : (document.currentScript && document.currentScript.src || new URL('out.js', document.baseURI).href)) }));
 var mldPlugin = tryImportModule("mongoose-lean-defaults", ({ url: (typeof document === 'undefined' ? new (require('u' + 'rl').URL)('file:' + __filename).href : (document.currentScript && document.currentScript.src || new URL('out.js', document.baseURI).href)) }));
@@ -414,7 +413,7 @@ var addMongooseSchemaFields = (zodSchema, monSchema, context) => {
         }
         let objMaybeCopy = obj;
         for (const [k, v] of Object.entries(objMaybeCopy)) {
-          if (v instanceof M.mongo.Binary) {
+          if (M.mongo && v instanceof M.mongo.Binary) {
             if (objMaybeCopy === obj) {
               objMaybeCopy = { ...obj };
             }
@@ -465,7 +464,7 @@ var toMongooseSchema = (rootZodSchema, options = {}) => {
       ...schemaOptions,
       query: {
         lean(leanOptions) {
-          return originalMongooseLean.call(
+          return M.Query.prototype.lean.call(
             this,
             typeof leanOptions === "object" || leanOptions == null ? {
               ...addMLVPlugin && { virtuals: true },
