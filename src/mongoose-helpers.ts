@@ -56,22 +56,22 @@ export type MongooseSchemaTypeParameters<
 
 // const noCastFn = (value: any) => value;
 
-export class MongooseZodBoolean extends M.SchemaTypes.Boolean {
+export class MongooseZodBoolean extends M.Schema.Types.Boolean {
   static schemaName = 'MongooseZodBoolean' as 'Boolean';
   // cast = noCastFn;
 }
 
-export class MongooseZodDate extends M.SchemaTypes.Date {
+export class MongooseZodDate extends M.Schema.Types.Date {
   static schemaName = 'MongooseZodDate' as 'Date';
   // cast = noCastFn;
 }
 
-export class MongooseZodNumber extends M.SchemaTypes.Number {
+export class MongooseZodNumber extends M.Schema.Types.Number {
   static schemaName = 'MongooseZodNumber' as 'Number';
   // cast = noCastFn;
 }
 
-export class MongooseZodString extends M.SchemaTypes.String {
+export class MongooseZodString extends M.Schema.Types.String {
   static schemaName = 'MongooseZodString' as 'String';
   // cast = noCastFn;
 }
