@@ -18,6 +18,8 @@ export const tryImportModule = async (
   const {
     default: {createRequire},
   } = await import('node:module');
+  if (!createRequire) return null;
+
   const require = createRequire(importMeta.url);
   try {
     const modulePath = require.resolve(id);

@@ -123,6 +123,8 @@ var tryImportModule = async (id, importMeta) => {
   const {
     default: { createRequire }
   } = await import('node:module');
+  if (!createRequire)
+    return null;
   const require2 = createRequire(importMeta.url);
   try {
     const modulePath = require2.resolve(id);
