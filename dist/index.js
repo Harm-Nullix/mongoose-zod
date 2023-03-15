@@ -1,7 +1,6 @@
 import z5, { z } from 'zod';
 export { z } from 'zod';
 import M, { Schema } from 'mongoose';
-import { createRequire } from 'node:module';
 
 // src/index.ts
 var MongooseTypeOptionsSymbol = Symbol.for("MongooseTypeOptions");
@@ -107,6 +106,8 @@ var setup = (options = {}) => {
     addMongooseTypeOptionsToZodPrototype(options.z || z);
   }
 };
+
+// src/utils.ts
 var getValidEnumValues = (obj) => {
   const validKeys = Object.keys(obj).filter((k) => typeof obj[obj[k]] !== "number");
   const filtered = {};
@@ -115,7 +116,13 @@ var getValidEnumValues = (obj) => {
   }
   return Object.values(filtered);
 };
-var tryImportModule = (id, importMeta) => {
+var isNodeServer = () => Boolean(process.env);
+var tryImportModule = async (id, importMeta) => {
+  if (!isNodeServer())
+    return null;
+  const {
+    default: { createRequire }
+  } = await import('node:module');
   const require2 = createRequire(importMeta.url);
   try {
     const modulePath = require2.resolve(id);
@@ -425,6 +432,16 @@ var ALL_PLUGINS_DISABLED = {
   leanGetters: true,
   leanVirtuals: true
 };
+var mlvPlugin = null;
+var mldPlugin = null;
+var mlgPlugin = null;
+(async () => {
+  if (isNodeServer()) {
+    mlvPlugin = await tryImportModule("mongoose-lean-virtuals", import.meta);
+    mldPlugin = await tryImportModule("mongoose-lean-defaults", import.meta);
+    mlgPlugin = await tryImportModule("mongoose-lean-getters", import.meta);
+  }
+})();
 var toMongooseSchema = (rootZodSchema, options = {}) => {
   if (!(rootZodSchema instanceof ZodMongoose)) {
     throw new MongooseZodError("Root schema must be an instance of ZodMongoose");
@@ -442,9 +459,6 @@ var toMongooseSchema = (rootZodSchema, options = {}) => {
   const metadata = rootZodSchema._def;
   const schemaOptionsFromField = metadata.innerType._def?.[MongooseSchemaOptionsSymbol];
   const schemaOptions = metadata?.mongoose.schemaOptions;
-  const mlvPlugin = tryImportModule("mongoose-lean-virtuals", import.meta);
-  const mldPlugin = tryImportModule("mongoose-lean-defaults", import.meta);
-  const mlgPlugin = tryImportModule("mongoose-lean-getters", import.meta);
   const addMLVPlugin = mlvPlugin && !isPluginDisabled("leanVirtuals", dp);
   const addMLDPlugin = mldPlugin && !isPluginDisabled("leanDefaults", dp);
   const addMLGPlugin = mlgPlugin && !isPluginDisabled("leanGetters", dp);
@@ -474,9 +488,9 @@ var toMongooseSchema = (rootZodSchema, options = {}) => {
     }
   );
   addMongooseSchemaFields(rootZodSchema, schema, { monSchemaOptions: schemaOptions, unknownKeys });
-  addMLVPlugin && schema.plugin(mlvPlugin.module);
-  addMLDPlugin && schema.plugin(mldPlugin.module?.default);
-  addMLGPlugin && schema.plugin(mlgPlugin.module);
+  addMLVPlugin && schema.plugin(mlvPlugin?.module);
+  addMLDPlugin && schema.plugin(mldPlugin?.module?.default);
+  addMLGPlugin && schema.plugin(mlgPlugin?.module);
   return schema;
 };
 

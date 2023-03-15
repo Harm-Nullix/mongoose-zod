@@ -14,7 +14,7 @@ import {
 } from './mongoose-helpers.js';
 import type {DisableablePlugins, ToMongooseSchemaOptions, UnknownKeysHandling} from './mz-types.js';
 import {setupState} from './setup.js';
-import {getValidEnumValues, tryImportModule} from './utils.js';
+import {getValidEnumValues, isNodeServer, tryImportModule} from './utils.js';
 import {SchemaFeatures, isZodType, unwrapZodSchema} from './zod-helpers.js';
 import {zodInstanceofOriginalClasses} from './zodInstances.service.js';
 
@@ -340,6 +340,17 @@ const ALL_PLUGINS_DISABLED: Record<keyof DisableablePlugins, true> = {
   leanGetters: true,
   leanVirtuals: true,
 };
+let mlvPlugin: {module: any} | null = null;
+let mldPlugin: {module: any} | null = null;
+let mlgPlugin: {module: any} | null = null;
+// eslint-disable-next-line unicorn/prefer-top-level-await
+(async () => {
+  if (isNodeServer()) {
+    mlvPlugin = await tryImportModule('mongoose-lean-virtuals', import.meta);
+    mldPlugin = await tryImportModule('mongoose-lean-defaults', import.meta);
+    mlgPlugin = await tryImportModule('mongoose-lean-getters', import.meta);
+  }
+})();
 
 export const toMongooseSchema = <Schema extends ZodMongoose<any, any>>(
   rootZodSchema: Schema,
@@ -366,10 +377,6 @@ export const toMongooseSchema = <Schema extends ZodMongoose<any, any>>(
   const metadata = rootZodSchema._def;
   const schemaOptionsFromField = metadata.innerType._def?.[MongooseSchemaOptionsSymbol];
   const schemaOptions = metadata?.mongoose.schemaOptions;
-
-  const mlvPlugin = tryImportModule('mongoose-lean-virtuals', import.meta);
-  const mldPlugin = tryImportModule('mongoose-lean-defaults', import.meta);
-  const mlgPlugin = tryImportModule('mongoose-lean-getters', import.meta);
 
   const addMLVPlugin = mlvPlugin && !isPluginDisabled('leanVirtuals', dp);
   const addMLDPlugin = mldPlugin && !isPluginDisabled('leanDefaults', dp);
@@ -412,9 +419,9 @@ export const toMongooseSchema = <Schema extends ZodMongoose<any, any>>(
 
   addMongooseSchemaFields(rootZodSchema, schema, {monSchemaOptions: schemaOptions, unknownKeys});
 
-  addMLVPlugin && schema.plugin(mlvPlugin.module);
-  addMLDPlugin && schema.plugin(mldPlugin.module?.default);
-  addMLGPlugin && schema.plugin(mlgPlugin.module);
+  addMLVPlugin && schema.plugin(mlvPlugin?.module);
+  addMLDPlugin && schema.plugin(mldPlugin?.module?.default);
+  addMLGPlugin && schema.plugin(mlgPlugin?.module);
 
   return schema;
 };
