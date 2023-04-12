@@ -120,6 +120,17 @@ export const unwrapZodSchema = (
     return unwrapZodSchema(schema._def.schema, options, _features);
   }
 
+  //unwrap special ZodEffect of preprocess with description "ObjectId", unwrap will trigger if above this one.
+  //It will fix string input to ObjectId conversion if used with: 
+  // export const getZodObjectIdField = () => z.preprocess(
+  //   v => (typeof v === 'string' && v.match(/^[a-f\d]{24}$/i) ? new Types.ObjectId(v) : v),
+  //   mongooseZodCustomType('ObjectId').describe('ObjectId')
+  // )
+
+  if (isZodType(schema, 'ZodEffects') && schema._def.effect.type === 'preprocess' && schema._def.schema.description === 'ObjectId') {
+    return unwrapZodSchema(schema._def.schema, options, _features);
+  }
+  
   if (isZodType(schema, 'ZodArray') && !options.doNotUnwrapArrays) {
     const wrapInArrayTimes = Number(_features.array?.wrapInArrayTimes || 0) + 1;
     return unwrapZodSchema(schema._def.type, options, {
