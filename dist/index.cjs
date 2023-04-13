@@ -178,6 +178,9 @@ var unwrapZodSchema = (schema, options = {}, _features = {}) => {
   if (isZodType(schema, "ZodEffects") && schema._def.effect.type === "refinement") {
     return unwrapZodSchema(schema._def.schema, options, _features);
   }
+  if (isZodType(schema, "ZodEffects") && schema._def.effect.type === "preprocess" && schema._def.schema.description === "ObjectId") {
+    return unwrapZodSchema(schema._def.schema, options, _features);
+  }
   if (isZodType(schema, "ZodArray") && !options.doNotUnwrapArrays) {
     const wrapInArrayTimes = Number(_features.array?.wrapInArrayTimes || 0) + 1;
     return unwrapZodSchema(schema._def.type, options, {
