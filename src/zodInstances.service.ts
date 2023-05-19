@@ -12,6 +12,8 @@ export const mongooseZodCustomType = <T extends keyof typeof M.Types & keyof typ
 
   type TFixed = T extends 'Buffer' ? BufferConstructor : (typeof M.Types)[T];
 
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
   const result = z.instanceof(instanceClass, params) as z.ZodType<
     InstanceType<TFixed>,
     z.ZodTypeDef,

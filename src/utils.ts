@@ -8,7 +8,7 @@ export const getValidEnumValues = (obj: any) => {
   return Object.values(filtered);
 };
 
-export const isNodeServer = () => Boolean(process.env);
+export const isNodeServer = () => Boolean(process?.env);
 
 export const tryImportModule = async (
   id: string,

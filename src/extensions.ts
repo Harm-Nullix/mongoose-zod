@@ -90,6 +90,8 @@ declare module 'zod' {
     ): T;
   }
 
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
   interface ZodObject<
     T extends z.ZodRawShape,
     UnknownKeys extends 'passthrough' | 'strict' | 'strip' = 'strip',

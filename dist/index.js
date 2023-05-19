@@ -49,7 +49,7 @@ var addMongooseTypeOptionsToZodPrototype = (toZ) => {
 // src/errors.ts
 var MongooseZodError = class extends Error {
 };
-var DateFieldZod = () => z.date().default(new Date());
+var DateFieldZod = () => z.date().default(/* @__PURE__ */ new Date());
 var genTimestampsSchema = (createdAtField = "createdAt", updatedAtField = "updatedAt") => {
   if (createdAtField != null && updatedAtField != null && createdAtField === updatedAtField) {
     throw new MongooseZodError("`createdAt` and `updatedAt` fields must be different");
@@ -72,15 +72,19 @@ var genTimestampsSchema = (createdAtField = "createdAt", updatedAtField = "updat
   return schema;
 };
 var MongooseZodBoolean = class extends M.Schema.Types.Boolean {
+  // cast = noCastFn;
 };
 MongooseZodBoolean.schemaName = "MongooseZodBoolean";
 var MongooseZodDate = class extends M.Schema.Types.Date {
+  // cast = noCastFn;
 };
 MongooseZodDate.schemaName = "MongooseZodDate";
 var MongooseZodNumber = class extends M.Schema.Types.Number {
+  // cast = noCastFn;
 };
 MongooseZodNumber.schemaName = "MongooseZodNumber";
 var MongooseZodString = class extends M.Schema.Types.String {
+  // cast = noCastFn;
 };
 MongooseZodString.schemaName = "MongooseZodString";
 var registerCustomMongooseZodTypes = () => {
@@ -116,7 +120,7 @@ var getValidEnumValues = (obj) => {
   }
   return Object.values(filtered);
 };
-var isNodeServer = () => Boolean(process.env);
+var isNodeServer = () => Boolean(process?.env);
 var tryImportModule = async (id, importMeta) => {
   if (!isNodeServer())
     return null;
@@ -168,6 +172,8 @@ var unwrapZodSchema = (schema, options = {}, _features = {}) => {
     return unwrapZodSchema(
       schema._def.innerType,
       options,
+      // Only top-most default value ends up being used
+      // (in case of `<...>.default(1).default(2)`, `2` will be used as the default value)
       "default" in _features ? _features : { ..._features, default: schema._def.defaultValue() }
     );
   }
@@ -253,7 +259,14 @@ var addMongooseSchemaFields = (zodSchema, monSchema, context) => {
   });
   const commonFieldOptions = {
     required: isRequired,
-    ..."default" in schemaFeatures ? { default: schemaFeatures.default } : isFieldArray || isZodType(zodSchemaFinal, "ZodObject") ? { default: void 0 } : {},
+    ..."default" in schemaFeatures ? { default: schemaFeatures.default } : (
+      // `mongoose-lean-defaults` will implicitly set default values on sub schemas.
+      // It will result in sub documents being ALWAYS defined after using `.lean()`
+      // and even optional fields of that schema having `undefined` values.
+      // This looks very weird to me and even broke my production.
+      // You need to explicitly set `default: undefined` to sub schemas to prevent such a behaviour.
+      isFieldArray || isZodType(zodSchemaFinal, "ZodObject") ? { default: void 0 } : {}
+    ),
     ...isFieldArray && { castNonArrays: false },
     ...monTypeOptions
   };

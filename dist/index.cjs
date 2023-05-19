@@ -3,6 +3,11 @@
 var z5 = require('zod');
 var M = require('mongoose');
 
+function _interopDefault (e) { return e && e.__esModule ? e : { default: e }; }
+
+var z5__default = /*#__PURE__*/_interopDefault(z5);
+var M__default = /*#__PURE__*/_interopDefault(M);
+
 // src/index.ts
 var MongooseTypeOptionsSymbol = Symbol.for("MongooseTypeOptions");
 var MongooseSchemaOptionsSymbol = Symbol.for("MongooseSchemaOptions");
@@ -50,7 +55,7 @@ var addMongooseTypeOptionsToZodPrototype = (toZ) => {
 // src/errors.ts
 var MongooseZodError = class extends Error {
 };
-var DateFieldZod = () => z5.z.date().default(new Date());
+var DateFieldZod = () => z5.z.date().default(/* @__PURE__ */ new Date());
 var genTimestampsSchema = (createdAtField = "createdAt", updatedAtField = "updatedAt") => {
   if (createdAtField != null && updatedAtField != null && createdAtField === updatedAtField) {
     throw new MongooseZodError("`createdAt` and `updatedAt` fields must be different");
@@ -72,27 +77,31 @@ var genTimestampsSchema = (createdAtField = "createdAt", updatedAtField = "updat
   };
   return schema;
 };
-var MongooseZodBoolean = class extends M.Schema.Types.Boolean {
+var MongooseZodBoolean = class extends M__default.default.Schema.Types.Boolean {
+  // cast = noCastFn;
 };
 MongooseZodBoolean.schemaName = "MongooseZodBoolean";
-var MongooseZodDate = class extends M.Schema.Types.Date {
+var MongooseZodDate = class extends M__default.default.Schema.Types.Date {
+  // cast = noCastFn;
 };
 MongooseZodDate.schemaName = "MongooseZodDate";
-var MongooseZodNumber = class extends M.Schema.Types.Number {
+var MongooseZodNumber = class extends M__default.default.Schema.Types.Number {
+  // cast = noCastFn;
 };
 MongooseZodNumber.schemaName = "MongooseZodNumber";
-var MongooseZodString = class extends M.Schema.Types.String {
+var MongooseZodString = class extends M__default.default.Schema.Types.String {
+  // cast = noCastFn;
 };
 MongooseZodString.schemaName = "MongooseZodString";
 var registerCustomMongooseZodTypes = () => {
-  Object.assign(M.Schema.Types, {
+  Object.assign(M__default.default.Schema.Types, {
     MongooseZodBoolean,
     MongooseZodDate,
     MongooseZodNumber,
     MongooseZodString
   });
 };
-var bufferMongooseGetter = (value) => value instanceof M.mongo.Binary ? value.buffer : value;
+var bufferMongooseGetter = (value) => value instanceof M__default.default.mongo.Binary ? value.buffer : value;
 var setupState = { isSetUp: false };
 var setup = (options = {}) => {
   if (setupState.isSetUp) {
@@ -117,7 +126,7 @@ var getValidEnumValues = (obj) => {
   }
   return Object.values(filtered);
 };
-var isNodeServer = () => Boolean(process.env);
+var isNodeServer = () => Boolean(process?.env);
 var tryImportModule = async (id, importMeta) => {
   if (!isNodeServer())
     return null;
@@ -169,6 +178,8 @@ var unwrapZodSchema = (schema, options = {}, _features = {}) => {
     return unwrapZodSchema(
       schema._def.innerType,
       options,
+      // Only top-most default value ends up being used
+      // (in case of `<...>.default(1).default(2)`, `2` will be used as the default value)
       "default" in _features ? _features : { ..._features, default: schema._def.defaultValue() }
     );
   }
@@ -196,18 +207,18 @@ var unwrapZodSchema = (schema, options = {}, _features = {}) => {
 };
 var zodInstanceofOriginalClasses = /* @__PURE__ */ new WeakMap();
 var mongooseZodCustomType = (typeName, params) => {
-  const instanceClass = typeName === "Buffer" ? Buffer : M.Types[typeName];
-  const typeClass = M.Schema.Types[typeName];
+  const instanceClass = typeName === "Buffer" ? Buffer : M__default.default.Types[typeName];
+  const typeClass = M__default.default.Schema.Types[typeName];
   const result = z5.z.instanceof(instanceClass, params);
   zodInstanceofOriginalClasses.set(result._def.schema, typeClass);
   return result;
 };
 
 // src/to-mongoose.ts
-var { Mixed: MongooseMixed } = M.Schema.Types;
+var { Mixed: MongooseMixed } = M__default.default.Schema.Types;
 registerCustomMongooseZodTypes();
 var getFixedOptionFn = (fn) => function(...args) {
-  const thisFixed = this && this instanceof M.Document ? this : void 0;
+  const thisFixed = this && this instanceof M__default.default.Document ? this : void 0;
   return fn.apply(thisFixed, args);
 };
 var getStrictOptionValue = (unknownKeys, schemaFeatures) => {
@@ -254,7 +265,14 @@ var addMongooseSchemaFields = (zodSchema, monSchema, context) => {
   });
   const commonFieldOptions = {
     required: isRequired,
-    ..."default" in schemaFeatures ? { default: schemaFeatures.default } : isFieldArray || isZodType(zodSchemaFinal, "ZodObject") ? { default: void 0 } : {},
+    ..."default" in schemaFeatures ? { default: schemaFeatures.default } : (
+      // `mongoose-lean-defaults` will implicitly set default values on sub schemas.
+      // It will result in sub documents being ALWAYS defined after using `.lean()`
+      // and even optional fields of that schema having `undefined` values.
+      // This looks very weird to me and even broke my production.
+      // You need to explicitly set `default: undefined` to sub schemas to prevent such a behaviour.
+      isFieldArray || isZodType(zodSchemaFinal, "ZodObject") ? { default: void 0 } : {}
+    ),
     ...isFieldArray && { castNonArrays: false },
     ...monTypeOptions
   };
@@ -381,7 +399,7 @@ var addMongooseSchemaFields = (zodSchema, monSchema, context) => {
   } else if (isZodType(zodSchemaFinal, "ZodAny")) {
     const instanceOfClass = zodInstanceofOriginalClasses.get(zodSchemaFinal);
     fieldType = instanceOfClass || MongooseMixed;
-    if (instanceOfClass === M.Schema.Types.Buffer && !("get" in commonFieldOptions)) {
+    if (instanceOfClass === M__default.default.Schema.Types.Buffer && !("get" in commonFieldOptions)) {
       commonFieldOptions.get = bufferMongooseGetter;
     }
   } else if (isZodType(zodSchemaFinal, "ZodEffects")) {
@@ -412,13 +430,13 @@ var addMongooseSchemaFields = (zodSchema, monSchema, context) => {
   monSchema.paths[addToField]?.validate(function(value) {
     let schemaToValidate = schemaFeatures.array?.originalArraySchema || zodSchemaFinal;
     if (isZodType(schemaToValidate, "ZodObject")) {
-      schemaToValidate = z5.preprocess((obj) => {
+      schemaToValidate = z5__default.default.preprocess((obj) => {
         if (!obj || typeof obj !== "object") {
           return obj;
         }
         let objMaybeCopy = obj;
         for (const [k, v] of Object.entries(objMaybeCopy)) {
-          if (M.mongo && v instanceof M.mongo.Binary) {
+          if (M__default.default.mongo && v instanceof M__default.default.mongo.Binary) {
             if (objMaybeCopy === obj) {
               objMaybeCopy = { ...obj };
             }
@@ -443,9 +461,9 @@ var mldPlugin = null;
 var mlgPlugin = null;
 (async () => {
   if (isNodeServer()) {
-    mlvPlugin = await tryImportModule("mongoose-lean-virtuals", ({ url: (typeof document === 'undefined' ? new (require('u' + 'rl').URL)('file:' + __filename).href : (document.currentScript && document.currentScript.src || new URL('out.js', document.baseURI).href)) }));
-    mldPlugin = await tryImportModule("mongoose-lean-defaults", ({ url: (typeof document === 'undefined' ? new (require('u' + 'rl').URL)('file:' + __filename).href : (document.currentScript && document.currentScript.src || new URL('out.js', document.baseURI).href)) }));
-    mlgPlugin = await tryImportModule("mongoose-lean-getters", ({ url: (typeof document === 'undefined' ? new (require('u' + 'rl').URL)('file:' + __filename).href : (document.currentScript && document.currentScript.src || new URL('out.js', document.baseURI).href)) }));
+    mlvPlugin = await tryImportModule("mongoose-lean-virtuals", ({ url: (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (document.currentScript && document.currentScript.src || new URL('out.js', document.baseURI).href)) }));
+    mldPlugin = await tryImportModule("mongoose-lean-defaults", ({ url: (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (document.currentScript && document.currentScript.src || new URL('out.js', document.baseURI).href)) }));
+    mlgPlugin = await tryImportModule("mongoose-lean-getters", ({ url: (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (document.currentScript && document.currentScript.src || new URL('out.js', document.baseURI).href)) }));
   }
 })();
 var toMongooseSchema = (rootZodSchema, options = {}) => {
@@ -478,7 +496,7 @@ var toMongooseSchema = (rootZodSchema, options = {}) => {
       ...schemaOptions,
       query: {
         lean(leanOptions) {
-          return M.Query.prototype.lean.call(
+          return M__default.default.Query.prototype.lean.call(
             this,
             typeof leanOptions === "object" || leanOptions == null ? {
               ...addMLVPlugin && { virtuals: true },
