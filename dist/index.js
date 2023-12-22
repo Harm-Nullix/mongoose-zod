@@ -120,7 +120,13 @@ var getValidEnumValues = (obj) => {
   }
   return Object.values(filtered);
 };
-var isNodeServer = () => Boolean(process?.env);
+var isNodeServer = () => {
+  try {
+    return Boolean(process?.env);
+  } catch {
+    return false;
+  }
+};
 var tryImportModule = async (id, importMeta) => {
   if (!isNodeServer())
     return null;
