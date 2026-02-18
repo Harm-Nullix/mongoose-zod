@@ -269,8 +269,9 @@ Instead `alias`, simply use a virtual (which is what mongoose aliases actually a
 ### What zod types are supported and how are they mapped to mongoose types?
 
 | zod type                                                              | mongoose type        |
-| :-------------------------------------------------------------------- | :------------------- |
+|:----------------------------------------------------------------------| :------------------- |
 | `Number`, number *finite* literal, native numeric enum, numbers union | `MongooseZodNumber`  |
+| `BigInt`, bigint *finite* literal, native bigint enum, bigint union   | `MongooseZodBigInt`  |
 | `String`, `Enum`, string literal, native string enum, strings union   | `MongooseZodString`  |
 | `Date`, dates union                                                   | `MongooseZodDate`    |
 | `Boolean`, boolean literal, booleans union                            | `MongooseZodBoolean` |

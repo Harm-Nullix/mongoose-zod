@@ -1,4 +1,4 @@
-import type {SchemaOptions, SchemaTypeOptions} from 'mongoose';
+import type {SchemaTypeOptions as MongooseSchemaTypeOptions, SchemaOptions} from 'mongoose';
 import {ZodObject, z} from 'zod';
 import type {PartialLaconic} from './types.js';
 
@@ -13,7 +13,7 @@ export interface MongooseMetadata<
   TVirtuals extends {} = {},
 > {
   typeOptions?: {
-    [Field in keyof DocType]?: SchemaTypeOptions<DocType[Field], DocType>;
+    [Field in keyof DocType]?: MongooseSchemaTypeOptions<DocType[Field], DocType>;
   };
   schemaOptions?: Omit<
     SchemaOptions<any, DocType, TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>,
@@ -79,14 +79,14 @@ export class ZodMongoose<
 
 declare module 'zod' {
   interface ZodTypeDef {
-    [MongooseTypeOptionsSymbol]?: SchemaTypeOptions<any>;
+    [MongooseTypeOptionsSymbol]?: MongooseSchemaTypeOptions<any>;
     [MongooseSchemaOptionsSymbol]?: SchemaOptions;
   }
 
   interface ZodSchema {
     mongooseTypeOptions<T extends ZodSchema<any>>(
       this: T,
-      options: SchemaTypeOptions<T['_output']>,
+      options: MongooseSchemaTypeOptions<T['_output']>,
     ): T;
   }
 
@@ -152,7 +152,7 @@ export const addMongooseToZodPrototype = (toZ: typeof z | null) => {
 
 export const addMongooseTypeOptions = function <T extends z.ZodSchema<any>>(
   zObject: T,
-  options: SchemaTypeOptions<T['_output']>,
+  options: MongooseSchemaTypeOptions<T['_output']>,
 ) {
   zObject._def[MongooseTypeOptionsSymbol] = {
     ...zObject._def[MongooseTypeOptionsSymbol],
@@ -168,7 +168,9 @@ export const addMongooseTypeOptionsToZodPrototype = (toZ: typeof z | null) => {
       delete z.ZodType.prototype.mongooseTypeOptions;
     }
   } else if (toZ.ZodType.prototype.mongooseTypeOptions === undefined) {
-    toZ.ZodType.prototype.mongooseTypeOptions = function (options: SchemaTypeOptions<any, any>) {
+    toZ.ZodType.prototype.mongooseTypeOptions = function (
+      options: MongooseSchemaTypeOptions<any, any>,
+    ) {
       return addMongooseTypeOptions(this, options);
     };
   }
@@ -208,15 +210,16 @@ declare module 'mongoose' {
     (this: ThisType): boolean;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-shadow
-  interface SchemaTypeOptions<T, ThisType = any> {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore KEIHARDE TS_IGNORE!
+  type SchemaTypeOptions<T, ThisType = any> = MongooseSchemaTypeOptions<T, ThisType> & {
     mzValidate?: MZSchemaValidator<Exclude<T, undefined>, ThisType | undefined>;
     mzRequired?:
       | boolean
       | MZRequiredFn<ThisType | null>
       | [boolean, string]
       | [MZRequiredFn<ThisType | null>, string];
-  }
+  };
 }
 
 export {z} from 'zod';

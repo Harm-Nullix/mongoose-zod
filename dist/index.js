@@ -49,7 +49,7 @@ var addMongooseTypeOptionsToZodPrototype = (toZ) => {
 // src/errors.ts
 var MongooseZodError = class extends Error {
 };
-var DateFieldZod = () => z.date().default(/* @__PURE__ */ new Date());
+var DateFieldZod = () => z.date().default(new Date());
 var genTimestampsSchema = (createdAtField = "createdAt", updatedAtField = "updatedAt") => {
   if (createdAtField != null && updatedAtField != null && createdAtField === updatedAtField) {
     throw new MongooseZodError("`createdAt` and `updatedAt` fields must be different");
@@ -72,19 +72,18 @@ var genTimestampsSchema = (createdAtField = "createdAt", updatedAtField = "updat
   return schema;
 };
 var MongooseZodBoolean = class extends M.Schema.Types.Boolean {
-  // cast = noCastFn;
 };
 MongooseZodBoolean.schemaName = "MongooseZodBoolean";
 var MongooseZodDate = class extends M.Schema.Types.Date {
-  // cast = noCastFn;
 };
 MongooseZodDate.schemaName = "MongooseZodDate";
 var MongooseZodNumber = class extends M.Schema.Types.Number {
-  // cast = noCastFn;
 };
 MongooseZodNumber.schemaName = "MongooseZodNumber";
+var MongooseZodBigInt = class extends M.Schema.Types.BigInt {
+};
+MongooseZodBigInt.schemaName = "MongooseZodBigInt";
 var MongooseZodString = class extends M.Schema.Types.String {
-  // cast = noCastFn;
 };
 MongooseZodString.schemaName = "MongooseZodString";
 var registerCustomMongooseZodTypes = () => {
@@ -92,6 +91,7 @@ var registerCustomMongooseZodTypes = () => {
     MongooseZodBoolean,
     MongooseZodDate,
     MongooseZodNumber,
+    MongooseZodBigInt,
     MongooseZodString
   });
 };
@@ -178,8 +178,6 @@ var unwrapZodSchema = (schema, options = {}, _features = {}) => {
     return unwrapZodSchema(
       schema._def.innerType,
       options,
-      // Only top-most default value ends up being used
-      // (in case of `<...>.default(1).default(2)`, `2` will be used as the default value)
       "default" in _features ? _features : { ..._features, default: schema._def.defaultValue() }
     );
   }
@@ -265,14 +263,7 @@ var addMongooseSchemaFields = (zodSchema, monSchema, context) => {
   });
   const commonFieldOptions = {
     required: isRequired,
-    ..."default" in schemaFeatures ? { default: schemaFeatures.default } : (
-      // `mongoose-lean-defaults` will implicitly set default values on sub schemas.
-      // It will result in sub documents being ALWAYS defined after using `.lean()`
-      // and even optional fields of that schema having `undefined` values.
-      // This looks very weird to me and even broke my production.
-      // You need to explicitly set `default: undefined` to sub schemas to prevent such a behaviour.
-      isFieldArray || isZodType(zodSchemaFinal, "ZodObject") ? { default: void 0 } : {}
-    ),
+    ..."default" in schemaFeatures ? { default: schemaFeatures.default } : isFieldArray || isZodType(zodSchemaFinal, "ZodObject") ? { default: void 0 } : {},
     ...isFieldArray && { castNonArrays: false },
     ...monTypeOptions
   };
@@ -340,6 +331,8 @@ var addMongooseSchemaFields = (zodSchema, monSchema, context) => {
     fieldType = relevantSchema;
   } else if (isZodType(zodSchemaFinal, "ZodNumber") || unionSchemaType === "ZodNumber") {
     fieldType = MongooseZodNumber;
+  } else if (isZodType(zodSchemaFinal, "ZodBigInt") || unionSchemaType === "ZodBigInt") {
+    fieldType = MongooseZodBigInt;
   } else if (isZodType(zodSchemaFinal, "ZodString") || unionSchemaType === "ZodString") {
     fieldType = MongooseZodString;
   } else if (isZodType(zodSchemaFinal, "ZodDate") || unionSchemaType === "ZodDate") {
@@ -358,6 +351,10 @@ var addMongooseSchemaFields = (zodSchema, monSchema, context) => {
         fieldType = Number.isNaN(literalValue) ? MongooseMixed : Number.isFinite(literalValue) ? MongooseZodNumber : void 0;
         break;
       }
+      case "bigint": {
+        fieldType = Number.isNaN(literalValue) ? MongooseMixed : Number.isFinite(literalValue) ? MongooseZodBigInt : void 0;
+        break;
+      }
       case "string": {
         fieldType = MongooseZodString;
         break;
@@ -370,7 +367,7 @@ var addMongooseSchemaFields = (zodSchema, monSchema, context) => {
         break;
       }
       default: {
-        errMsgAddendum = "only boolean, number, string or null literals are supported";
+        errMsgAddendum = "only boolean, number, bigint, string or null literals are supported";
       }
     }
   } else if (isZodType(zodSchemaFinal, "ZodEnum")) {
@@ -385,12 +382,14 @@ var addMongooseSchemaFields = (zodSchema, monSchema, context) => {
     const valuesJsTypes = [...new Set(enumValues.map((v) => typeof v))];
     if (valuesJsTypes.length === 1 && valuesJsTypes[0] === "number") {
       fieldType = MongooseZodNumber;
+    } else if (valuesJsTypes.length === 1 && valuesJsTypes[0] === "bigint") {
+      fieldType = MongooseZodBigInt;
     } else if (valuesJsTypes.length === 1 && valuesJsTypes[0] === "string") {
       fieldType = MongooseZodString;
-    } else if (valuesJsTypes.length === 2 && ["string", "number"].every((t) => valuesJsTypes.includes(t))) {
+    } else if (valuesJsTypes.length === 2 && ["string", "number", "bigint"].every((t) => valuesJsTypes.includes(t))) {
       fieldType = MongooseMixed;
     } else {
-      errMsgAddendum = "only nonempty native enums with number and strings values are supported";
+      errMsgAddendum = "only nonempty native enums with number, bigint and strings values are supported";
     }
   } else if (isZodType(zodSchema, "ZodNaN") || isZodType(zodSchema, "ZodNull")) {
     fieldType = MongooseMixed;

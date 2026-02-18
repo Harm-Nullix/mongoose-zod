@@ -70,6 +70,10 @@ export class MongooseZodNumber extends M.Schema.Types.Number {
   static schemaName = 'MongooseZodNumber' as 'Number';
   // cast = noCastFn;
 }
+export class MongooseZodBigInt extends M.Schema.Types.BigInt {
+  static schemaName = 'MongooseZodBigInt' as 'BigInt';
+  // cast = noCastFn;
+}
 
 export class MongooseZodString extends M.Schema.Types.String {
   static schemaName = 'MongooseZodString' as 'String';
@@ -81,6 +85,7 @@ export const registerCustomMongooseZodTypes = (): void => {
     MongooseZodBoolean,
     MongooseZodDate,
     MongooseZodNumber,
+    MongooseZodBigInt,
     MongooseZodString,
   });
 };

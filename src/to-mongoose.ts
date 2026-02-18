@@ -5,6 +5,7 @@ import {MongooseZodError} from './errors.js';
 import {MongooseSchemaOptionsSymbol, ZodMongoose} from './extensions.js';
 import {
   MongooseSchemaTypeParameters,
+  MongooseZodBigInt,
   MongooseZodBoolean,
   MongooseZodDate,
   MongooseZodNumber,
@@ -181,6 +182,8 @@ const addMongooseSchemaFields = (
     fieldType = relevantSchema;
   } else if (isZodType(zodSchemaFinal, 'ZodNumber') || unionSchemaType === 'ZodNumber') {
     fieldType = MongooseZodNumber;
+  } else if (isZodType(zodSchemaFinal, 'ZodBigInt') || unionSchemaType === 'ZodBigInt') {
+    fieldType = MongooseZodBigInt;
   } else if (isZodType(zodSchemaFinal, 'ZodString') || unionSchemaType === 'ZodString') {
     fieldType = MongooseZodString;
   } else if (isZodType(zodSchemaFinal, 'ZodDate') || unionSchemaType === 'ZodDate') {
@@ -203,6 +206,14 @@ const addMongooseSchemaFields = (
           : undefined;
         break;
       }
+      case 'bigint': {
+        fieldType = Number.isNaN(literalValue)
+          ? MongooseMixed
+          : Number.isFinite(literalValue)
+          ? MongooseZodBigInt
+          : undefined;
+        break;
+      }
       case 'string': {
         fieldType = MongooseZodString;
         break;
@@ -215,7 +226,7 @@ const addMongooseSchemaFields = (
         break;
       }
       default: {
-        errMsgAddendum = 'only boolean, number, string or null literals are supported';
+        errMsgAddendum = 'only boolean, number, bigint, string or null literals are supported';
       }
     }
   } else if (isZodType(zodSchemaFinal, 'ZodEnum')) {
@@ -234,15 +245,18 @@ const addMongooseSchemaFields = (
     const valuesJsTypes = [...new Set(enumValues.map((v) => typeof v))];
     if (valuesJsTypes.length === 1 && valuesJsTypes[0] === 'number') {
       fieldType = MongooseZodNumber;
+    } else if (valuesJsTypes.length === 1 && valuesJsTypes[0] === 'bigint') {
+      fieldType = MongooseZodBigInt;
     } else if (valuesJsTypes.length === 1 && valuesJsTypes[0] === 'string') {
       fieldType = MongooseZodString;
     } else if (
       valuesJsTypes.length === 2 &&
-      (['string', 'number'] as const).every((t) => valuesJsTypes.includes(t))
+      (['string', 'number', 'bigint'] as const).every((t) => valuesJsTypes.includes(t))
     ) {
       fieldType = MongooseMixed;
     } else {
-      errMsgAddendum = 'only nonempty native enums with number and strings values are supported';
+      errMsgAddendum =
+        'only nonempty native enums with number, bigint and strings values are supported';
     }
   } else if (isZodType(zodSchema, 'ZodNaN') || isZodType(zodSchema, 'ZodNull')) {
     fieldType = MongooseMixed;
@@ -417,6 +431,8 @@ export const toMongooseSchema = <Schema extends ZodMongoose<any, any>>(
     },
   );
 
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore KEIHARDE TS_IGNORE!
   addMongooseSchemaFields(rootZodSchema, schema, {monSchemaOptions: schemaOptions, unknownKeys});
 
   addMLVPlugin && schema.plugin(mlvPlugin?.module);
