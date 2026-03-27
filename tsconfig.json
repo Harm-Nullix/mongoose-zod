@@ -1,31 +1,13 @@
 {
-  /*
-  {
-    "$schema": "https://json.schemastore.org/tsconfig",
-    "display": "Node 16",
-
-    "compilerOptions": {
-      "lib": ["es2021"],
-      "module": "commonjs",
-      "target": "es2021",
-
-      "strict": true,
-      "esModuleInterop": true,
-      "skipLibCheck": true,
-      "forceConsistentCasingInFileNames": true,
-      "moduleResolution": "node"
-    }
-  }
-  */
   "extends": "@tsconfig/node14/tsconfig.json",
 
   "compilerOptions": {
     "outDir": "./dist",
     "module": "esnext",
+    "lib": ["esnext"],
     "target": "esnext",
     "resolveJsonModule": true,
     "noUncheckedIndexedAccess": true,
-    "importsNotUsedAsValues": "error",
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
     "noErrorTruncation": true
