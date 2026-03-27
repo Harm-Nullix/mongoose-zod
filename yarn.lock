@@ -738,6 +738,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@quansync/fs@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "@quansync/fs@npm:1.0.0"
+  dependencies:
+    quansync: "npm:^1.0.0"
+  checksum: 10c0/41a7e145d4fc349eaeac20ee7ffe0c876a7c26b2268d5704b462b3e7379091221336e315b2b346d5b07a531502a41cad15c9f374800cc60b6339d074ef99aa16
+  languageName: node
+  linkType: hard
+
 "@rollup/plugin-commonjs@npm:29.0.2":
   version: 29.0.2
   resolution: "@rollup/plugin-commonjs@npm:29.0.2"
@@ -1315,6 +1324,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"args-tokenizer@npm:^0.3.0":
+  version: 0.3.0
+  resolution: "args-tokenizer@npm:0.3.0"
+  checksum: 10c0/214b17add0ed80deea86dfd257260038bad7b434f75f2e4de118b87cd01dee76f9d3fee55c6fdd1b096a593cabdeee281b55f71a8ffde48cc642a8245d41b6a7
+  languageName: node
+  linkType: hard
+
 "array-buffer-byte-length@npm:^1.0.1, array-buffer-byte-length@npm:^1.0.2":
   version: 1.0.2
   resolution: "array-buffer-byte-length@npm:1.0.2"
@@ -1632,6 +1648,25 @@ __metadata:
   languageName: node
   linkType: hard
 
+"bumpp@npm:11.0.1":
+  version: 11.0.1
+  resolution: "bumpp@npm:11.0.1"
+  dependencies:
+    args-tokenizer: "npm:^0.3.0"
+    cac: "npm:^7.0.0"
+    jsonc-parser: "npm:^3.3.1"
+    package-manager-detector: "npm:^1.6.0"
+    semver: "npm:^7.7.4"
+    tinyexec: "npm:^1.0.4"
+    tinyglobby: "npm:^0.2.15"
+    unconfig: "npm:^7.5.0"
+    yaml: "npm:^2.8.2"
+  bin:
+    bumpp: bin/bumpp.mjs
+  checksum: 10c0/57d0980f2f9809ad512a662f241a33e96d504a0aa39dbcf9d3ee86434e8aac9dc16e3c578b8c8e9a663a047be98a5b47ae5cdf4f6d778c49838537d3baf76a95
+  languageName: node
+  linkType: hard
+
 "bun-types@npm:1.3.10":
   version: 1.3.10
   resolution: "bun-types@npm:1.3.10"
@@ -1728,6 +1763,13 @@ __metadata:
     magicast:
       optional: true
   checksum: 10c0/5b2ac937175717df62fc74ce7fe38685ebd02b3fa94e9cc05be9630d3e5d7f1ec437413d23d63ec0d2eaffcfeda824fb14d3d0fab3df522e60a8b4b3e32a4a33
+  languageName: node
+  linkType: hard
+
+"cac@npm:^7.0.0":
+  version: 7.0.0
+  resolution: "cac@npm:7.0.0"
+  checksum: 10c0/e9da33cb9f0425546ae92a450d479276f9969a050fe64f5d6fedf058bdd87f22a370797fe1c158e07655fa9fc183749df7cb2037431e3772faa7bee9919fb763
   languageName: node
   linkType: hard
 
@@ -3736,6 +3778,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"jsonc-parser@npm:^3.3.1":
+  version: 3.3.1
+  resolution: "jsonc-parser@npm:3.3.1"
+  checksum: 10c0/269c3ae0a0e4f907a914bf334306c384aabb9929bd8c99f909275ebd5c2d3bc70b9bcd119ad794f339dec9f24b6a4ee9cd5a8ab2e6435e730ad4075388fc2ab6
+  languageName: node
+  linkType: hard
+
 "jsx-ast-utils-x@npm:^0.1.0":
   version: 0.1.0
   resolution: "jsx-ast-utils-x@npm:0.1.0"
@@ -4233,6 +4282,7 @@ __metadata:
     "@types/node": "npm:24.12.0"
     "@typescript-eslint/eslint-plugin": "npm:8.57.2"
     "@typescript-eslint/parser": "npm:8.57.2"
+    bumpp: "npm:11.0.1"
     bun: "npm:1.3.11"
     editorconfig-checker: "npm:6.1.1"
     eslint: "npm:10.1.0"
@@ -4264,13 +4314,13 @@ __metadata:
     tslib: "npm:2.8.1"
     typescript: "npm:5.9.3"
     typescript-eslint: "npm:8.57.2"
-    zod: "npm:^3.19.1"
+    zod: "npm:^4.3.6"
   peerDependencies:
     mongoose: ^8.x
     mongoose-lean-defaults: ^2.x
     mongoose-lean-getters: ^2.x
     mongoose-lean-virtuals: ^2.x
-    zod: ^3.x
+    zod: ^4.x
   peerDependenciesMeta:
     mongoose-lean-defaults:
       optional: true
@@ -4686,6 +4736,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"package-manager-detector@npm:^1.6.0":
+  version: 1.6.0
+  resolution: "package-manager-detector@npm:1.6.0"
+  checksum: 10c0/6419d0b840be64fd45bcdcb7a19f09b81b65456d5e7f7a3daac305a4c90643052122f6ac0308afe548ffee75e36148532a2002ea9d292754f1e385aa2e1ea03b
+  languageName: node
+  linkType: hard
+
 "parent-module@npm:^1.0.0":
   version: 1.0.1
   resolution: "parent-module@npm:1.0.1"
@@ -4887,6 +4944,13 @@ __metadata:
   version: 2.3.1
   resolution: "punycode@npm:2.3.1"
   checksum: 10c0/14f76a8206bc3464f794fb2e3d3cc665ae416c01893ad7a02b23766eb07159144ee612ad67af5e84fa4479ccfe67678c4feb126b0485651b302babf66f04f9e9
+  languageName: node
+  linkType: hard
+
+"quansync@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "quansync@npm:1.0.0"
+  checksum: 10c0/076542634399a0cc46078baab6b31acee7a88c5a435234345f645aedaa42bc6a63836e655fb39b1b21a83c98ec86a4b73ec5e2b2d6f3fdc22711eeeff9463253
   languageName: node
   linkType: hard
 
@@ -5649,7 +5713,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tinyexec@npm:^1.0.2":
+"tinyexec@npm:^1.0.2, tinyexec@npm:^1.0.4":
   version: 1.0.4
   resolution: "tinyexec@npm:1.0.4"
   checksum: 10c0/d4a5bbcf6bdb23527a4b74c4aa566f41432167112fe76f420ec7e3a90a3ecfd3a7d944383e2719fc3987b69400f7b928daf08700d145fb527c2e80ec01e198bd
@@ -5816,6 +5880,29 @@ __metadata:
     has-symbols: "npm:^1.1.0"
     which-boxed-primitive: "npm:^1.1.1"
   checksum: 10c0/7dbd35ab02b0e05fe07136c72cb9355091242455473ec15057c11430129bab38b7b3624019b8778d02a881c13de44d63cd02d122ee782fb519e1de7775b5b982
+  languageName: node
+  linkType: hard
+
+"unconfig-core@npm:7.5.0":
+  version: 7.5.0
+  resolution: "unconfig-core@npm:7.5.0"
+  dependencies:
+    "@quansync/fs": "npm:^1.0.0"
+    quansync: "npm:^1.0.0"
+  checksum: 10c0/9c9f745254aa8e267140430a432353d17ee87f625b0ea0668e189d88736828d117b66bd2dd41f1d48bd40d44d5b7c7d160e8b7996a60c8f484e2975ef73c7cb7
+  languageName: node
+  linkType: hard
+
+"unconfig@npm:^7.5.0":
+  version: 7.5.0
+  resolution: "unconfig@npm:7.5.0"
+  dependencies:
+    "@quansync/fs": "npm:^1.0.0"
+    defu: "npm:^6.1.4"
+    jiti: "npm:^2.6.1"
+    quansync: "npm:^1.0.0"
+    unconfig-core: "npm:7.5.0"
+  checksum: 10c0/940cb2b30d802e4edbb36c0469d122ec5d2402b20635aa71c223d24db431e2b83624672d1b42ba0023085111f3dddccc77516d23b79e1f0d6c67798a1351820c
   languageName: node
   linkType: hard
 
@@ -6027,6 +6114,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"yaml@npm:^2.8.2":
+  version: 2.8.3
+  resolution: "yaml@npm:2.8.3"
+  bin:
+    yaml: bin.mjs
+  checksum: 10c0/ddff0e11c1b467728d7eb4633db61c5f5de3d8e9373cf84d08fb0cdee03e1f58f02b9f1c51a4a8a865751695addbd465a77f73f1079be91fe5493b29c305fd77
+  languageName: node
+  linkType: hard
+
 "yargs-parser@npm:21.1.1":
   version: 21.1.1
   resolution: "yargs-parser@npm:21.1.1"
@@ -6065,9 +6161,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"zod@npm:^3.19.1":
-  version: 3.25.76
-  resolution: "zod@npm:3.25.76"
-  checksum: 10c0/5718ec35e3c40b600316c5b4c5e4976f7fee68151bc8f8d90ec18a469be9571f072e1bbaace10f1e85cf8892ea12d90821b200e980ab46916a6166a4260a983c
+"zod@npm:^4.3.6":
+  version: 4.3.6
+  resolution: "zod@npm:4.3.6"
+  checksum: 10c0/860d25a81ab41d33aa25f8d0d07b091a04acb426e605f396227a796e9e800c44723ed96d0f53a512b57be3d1520f45bf69c0cb3b378a232a00787a2609625307
   languageName: node
   linkType: hard

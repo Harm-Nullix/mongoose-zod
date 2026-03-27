@@ -1,156 +1,81 @@
-import type M from 'mongoose';
-import type {ZodSchema, z} from 'zod';
-import {
-  MongooseMetadata,
-  MongooseSchemaOptionsSymbol,
-  MongooseTypeOptionsSymbol,
-  ZodMongoose,
-} from './extensions.js';
+import {z} from 'zod/v4';
 
-export interface ZodTypes {
-  ZodAny: z.ZodAny;
-  ZodArray: z.ZodArray<any>;
-  ZodBigInt: z.ZodBigInt;
-  ZodBoolean: z.ZodBoolean;
-  ZodBranded: z.ZodBranded<any, any>;
-  ZodDate: z.ZodDate;
-  ZodDefault: z.ZodDefault<any>;
-  ZodEffects: z.ZodEffects<any>;
-  ZodEnum: z.ZodEnum<any>;
-  ZodFunction: z.ZodFunction<any, any>;
-  ZodIntersection: z.ZodIntersection<any, any>;
-  ZodLazy: z.ZodLazy<any>;
-  ZodLiteral: z.ZodLiteral<any>;
-  ZodMap: z.ZodMap;
-  ZodNaN: z.ZodNaN;
-  ZodNativeEnum: z.ZodNativeEnum<any>;
-  ZodNull: z.ZodNull;
-  ZodNullable: z.ZodNullable<any>;
-  ZodNumber: z.ZodNumber;
-  ZodObject: z.ZodObject<any>;
-  ZodOptional: z.ZodOptional<any>;
-  ZodUndefined: z.ZodUndefined;
-  ZodPromise: z.ZodPromise<any>;
-  ZodRecord: z.ZodRecord;
-  ZodSet: z.ZodSet;
-  ZodSchema: z.ZodSchema;
-  ZodString: z.ZodString;
-  ZodTuple: z.ZodTuple<any>;
-  ZodUnion: z.ZodUnion<any>;
-  ZodDiscriminatedUnion: z.ZodDiscriminatedUnion<any, any>;
-  ZodUnknown: z.ZodUnknown;
-  ZodVoid: z.ZodVoid;
+export const getDef = (schema: any) => schema?.def || schema?._def || schema?._zod?.def;
 
-  ZodType: z.ZodType;
-  ZodTypeAny: z.ZodTypeAny;
-}
+export const getTypeName = (schema: any): string | undefined => {
+  const def = getDef(schema);
+  if (!def) return undefined;
 
-export const isZodType = <TypeName extends keyof ZodTypes>(
-  schema: object,
-  typeName: TypeName,
-): schema is ZodTypes[TypeName] => {
-  const constructorName = schema.constructor.name;
-  if (constructorName === typeName) {
-    return true;
-  }
-  // Also check _def.typeName which is more reliable in some environments (like Bun or minified code)
-  return (schema as any)._def?.typeName === typeName;
+  // Zod v4 uses .type for some internal things, or .typeName
+  return (
+    def.type ||
+    def.typeName ||
+    (schema as any)._typeName ||
+    schema.constructor?.name?.replace('Zod', '').toLowerCase()
+  );
 };
 
 export interface SchemaFeatures {
   default?: any;
+  required?: boolean;
   isOptional?: boolean;
-  unknownKeys?: 'strict' | 'passthrough';
-  unionSchemaType?: keyof ZodTypes;
-  array?: {
-    wrapInArrayTimes: number;
-    originalArraySchema: z.ZodArray<any>;
-  };
-  mongoose?: MongooseMetadata<any>;
-  mongooseTypeOptions?: M.SchemaTypeOptions<any>;
-  mongooseSchemaOptions?: M.SchemaOptions;
+  isNullable?: boolean;
+  mongoose?: any;
+  arrayStack?: number;
 }
 
 export const unwrapZodSchema = (
-  schema: ZodSchema<any>,
-  options: {doNotUnwrapArrays?: boolean} = {},
-  _features: SchemaFeatures = {},
-): {schema: ZodSchema<any>; features: SchemaFeatures} => {
-  const monTypeOptions = schema._def[MongooseTypeOptionsSymbol];
-  _features.mongooseTypeOptions ||= monTypeOptions;
-  const monSchemaOptions = schema._def[MongooseSchemaOptionsSymbol];
-  _features.mongooseSchemaOptions ||= monSchemaOptions;
+  schema: z.ZodTypeAny,
+  // eslint-disable-next-line unicorn/no-object-as-default-parameter
+  features: SchemaFeatures = {required: true, arrayStack: 0},
+): {schema: z.ZodTypeAny; features: SchemaFeatures} => {
+  if (!schema) return {schema, features};
 
-  if (isZodType(schema, 'ZodUnion')) {
-    const unionSchemaTypes = schema._def.options.map((v: z.ZodSchema) => v.constructor.name);
-    if (new Set(unionSchemaTypes).size === 1) {
-      _features.unionSchemaType ??= unionSchemaTypes[0] as keyof ZodTypes;
+  const def = getDef(schema);
+  if (!def) return {schema, features};
+
+  const type = getTypeName(schema);
+
+  switch (type) {
+    case 'optional': {
+      return unwrapZodSchema((schema as any).unwrap ? (schema as any).unwrap() : def.innerType, {
+        ...features,
+        required: false,
+        isOptional: true,
+      });
+    }
+    case 'nullable': {
+      return unwrapZodSchema((schema as any).unwrap ? (schema as any).unwrap() : def.innerType, {
+        ...features,
+        isNullable: true,
+      });
+    }
+    case 'default': {
+      return unwrapZodSchema(def.innerType || (schema as any)._def.innerType, {
+        ...features,
+        default: typeof def.defaultValue === 'function' ? def.defaultValue() : def.defaultValue,
+      });
+    }
+    case 'transform':
+    case 'preprocess':
+    case 'refinement':
+    case 'effects': {
+      return unwrapZodSchema(def.schema || def.innerType || (schema as any)._def.schema, features);
+    }
+    case 'pipe': {
+      return unwrapZodSchema(def.in || (schema as any)._def.in, features);
+    }
+    case 'lazy': {
+      return unwrapZodSchema((schema as any)._def.getter(), features);
+    }
+    case 'branded': {
+      return unwrapZodSchema(
+        (schema as any).unwrap ? (schema as any).unwrap() : def.innerType,
+        features,
+      );
+    }
+    default: {
+      return {schema, features};
     }
   }
-
-  if (schema instanceof ZodMongoose) {
-    return unwrapZodSchema(schema._def.innerType, options, {
-      ..._features,
-      mongoose: schema._def.mongoose,
-    });
-  }
-
-  // Remove `strict` or `passthrough` feature - set to strip mode (default)
-  if (isZodType(schema, 'ZodObject')) {
-    const unknownKeys = schema._def.unknownKeys as string;
-    if (unknownKeys === 'strict' || unknownKeys === 'passthrough') {
-      return unwrapZodSchema(schema.strip(), options, {..._features, unknownKeys});
-    }
-  }
-
-  if (isZodType(schema, 'ZodOptional')) {
-    return unwrapZodSchema(schema.unwrap(), options, {..._features, isOptional: true});
-  }
-
-  if (isZodType(schema, 'ZodDefault')) {
-    return unwrapZodSchema(
-      schema._def.innerType,
-      options,
-      // Only top-most default value ends up being used
-      // (in case of `<...>.default(1).default(2)`, `2` will be used as the default value)
-      'default' in _features ? _features : {..._features, default: schema._def.defaultValue()},
-    );
-  }
-
-  if (isZodType(schema, 'ZodBranded') || isZodType(schema, 'ZodNullable')) {
-    return unwrapZodSchema(schema.unwrap(), options, {..._features});
-  }
-
-  if (isZodType(schema, 'ZodEffects') && schema._def.effect.type === 'refinement') {
-    return unwrapZodSchema(schema._def.schema, options, _features);
-  }
-
-  // unwrap special ZodEffect of preprocess with description "ObjectId", unwrap will trigger if above this one.
-  // It will fix string input to ObjectId conversion if used with:
-  // export const getZodObjectIdField = () => z.preprocess(
-  //   v => (typeof v === 'string' && v.match(/^[a-f\d]{24}$/i) ? new Types.ObjectId(v) : v),
-  //   mongooseZodCustomType('ObjectId').describe('ObjectId')
-  // )
-
-  if (
-    isZodType(schema, 'ZodEffects') &&
-    schema._def.effect.type === 'preprocess' &&
-    schema._def.schema.description === 'ObjectId'
-  ) {
-    return unwrapZodSchema(schema._def.schema, options, _features);
-  }
-
-  if (isZodType(schema, 'ZodArray') && !options.doNotUnwrapArrays) {
-    const wrapInArrayTimes = Number(_features.array?.wrapInArrayTimes || 0) + 1;
-    return unwrapZodSchema(schema._def.type, options, {
-      ..._features,
-      array: {
-        ..._features.array,
-        wrapInArrayTimes,
-        originalArraySchema: _features.array?.originalArraySchema || schema,
-      },
-    });
-  }
-
-  return {schema, features: _features};
 };

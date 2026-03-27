@@ -1,4 +1,4 @@
-import {z as originalZ} from 'zod';
+import {z as originalZ} from 'zod/v4';
 import {addMongooseToZodPrototype, addMongooseTypeOptionsToZodPrototype} from './extensions.js';
 import type {SetupOptions} from './mz-types.js';
 

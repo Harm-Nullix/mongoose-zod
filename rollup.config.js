@@ -3,7 +3,7 @@ import resolve from '@rollup/plugin-node-resolve';
 import typescript from '@rollup/plugin-typescript';
 import {dts} from 'rollup-plugin-dts';
 
-const external = ['mongoose', 'zod', 'lodash', 'node:module'];
+const external = ['mongoose', 'zod', 'zod/v4', 'lodash', 'node:module'];
 
 export default [
   {

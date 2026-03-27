@@ -1,94 +1,45 @@
-import M from 'mongoose';
-import {z} from 'zod';
-import {MongooseZodError} from './errors.js';
-import {MongooseSchemaOptionsSymbol, ZodMongoose} from './extensions.js';
+import {z} from 'zod/v4';
+import {withMongoose} from './registry.js';
 
 type StringLiteral<T> = T extends string ? (string extends T ? never : T) : never;
 
-const DateFieldZod = () => z.date().default(new Date());
+const DateFieldZod = () => z.date().default(() => new Date());
 
 export const genTimestampsSchema = <CrAt = 'createdAt', UpAt = 'updatedAt'>(
-  createdAtField: StringLiteral<CrAt | 'createdAt'> | null = 'createdAt',
-  updatedAtField: StringLiteral<UpAt | 'updatedAt'> | null = 'updatedAt',
+  createdAtField: StringLiteral<CrAt | 'createdAt'> | null = 'createdAt' as any,
+  updatedAtField: StringLiteral<UpAt | 'updatedAt'> | null = 'updatedAt' as any,
 ) => {
-  if (createdAtField != null && updatedAtField != null && createdAtField === updatedAtField) {
-    throw new MongooseZodError('`createdAt` and `updatedAt` fields must be different');
+  if (
+    createdAtField != null &&
+    updatedAtField != null &&
+    (createdAtField as string) === (updatedAtField as string)
+  ) {
+    throw new Error('`createdAt` and `updatedAt` fields must be different');
   }
 
-  const schema = z.object({
-    ...(createdAtField != null && {
-      [createdAtField]: DateFieldZod().mongooseTypeOptions({immutable: true, index: true}),
-    }),
-    ...(updatedAtField != null && {
-      [updatedAtField]: DateFieldZod().mongooseTypeOptions({index: true}),
-    }),
-  } as {
-    [_ in StringLiteral<NonNullable<CrAt | UpAt>>]: z.ZodDefault<z.ZodDate>;
-  });
-  schema._def[MongooseSchemaOptionsSymbol] = {
-    ...schema._def[MongooseSchemaOptionsSymbol],
+  const shape: any = {};
+  if (createdAtField != null) {
+    shape[createdAtField as string] = withMongoose(DateFieldZod(), {immutable: true, index: true});
+  }
+  if (updatedAtField != null) {
+    shape[updatedAtField as string] = withMongoose(DateFieldZod(), {index: true});
+  }
+
+  const schema = z.object(shape);
+
+  const meta = {
     timestamps: {
-      createdAt: createdAtField == null ? false : createdAtField,
-      updatedAt: updatedAtField == null ? false : updatedAtField,
+      createdAt: createdAtField == null ? false : (createdAtField as string),
+      updatedAt: updatedAtField == null ? false : (updatedAtField as string),
     },
   };
-  return schema;
-};
 
-export type MongooseSchemaTypeParameters<
-  T,
-  Parameter extends 'InstanceMethods' | 'QueryHelpers' | 'TStaticMethods' | 'TVirtuals',
-> = T extends ZodMongoose<
-  any,
-  any,
-  infer InstanceMethods,
-  infer QueryHelpers,
-  infer TStaticMethods,
-  infer TVirtuals
->
-  ? {
-      InstanceMethods: InstanceMethods;
-      QueryHelpers: QueryHelpers;
-      TStaticMethods: TStaticMethods;
-      TVirtuals: TVirtuals;
-    }[Parameter]
-  : {};
+  // Attach metadata to the instance if supported, but also register it
+  const schemaWithMeta = withMongoose(schema, meta);
+  (schemaWithMeta as any).meta = () => meta;
 
-// const noCastFn = (value: any) => value;
-
-export class MongooseZodBoolean extends M.Schema.Types.Boolean {
-  static schemaName = 'MongooseZodBoolean' as 'Boolean';
-  // cast = noCastFn;
-}
-
-export class MongooseZodDate extends M.Schema.Types.Date {
-  static schemaName = 'MongooseZodDate' as 'Date';
-  // cast = noCastFn;
-}
-
-export class MongooseZodNumber extends M.Schema.Types.Number {
-  static schemaName = 'MongooseZodNumber' as 'Number';
-  // cast = noCastFn;
-}
-export class MongooseZodBigInt extends M.Schema.Types.BigInt {
-  static schemaName = 'MongooseZodBigInt' as 'BigInt';
-  // cast = noCastFn;
-}
-
-export class MongooseZodString extends M.Schema.Types.String {
-  static schemaName = 'MongooseZodString' as 'String';
-  // cast = noCastFn;
-}
-
-export const registerCustomMongooseZodTypes = (): void => {
-  Object.assign(M.Schema.Types, {
-    MongooseZodBoolean,
-    MongooseZodDate,
-    MongooseZodNumber,
-    MongooseZodBigInt,
-    MongooseZodString,
-  });
+  return schemaWithMeta;
 };
 
 export const bufferMongooseGetter = (value: unknown) =>
-  value instanceof M.mongo.Binary ? value.buffer : value;
+  value != null && (value as any)._bsontype === 'Binary' ? (value as any).buffer : value;

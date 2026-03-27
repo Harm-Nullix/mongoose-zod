@@ -1,105 +1,52 @@
-import z$1, { z, ZodObject, ZodTypeAny } from 'zod';
-export { z } from 'zod';
-import M, { SchemaTypeOptions, SchemaOptions } from 'mongoose';
+import { z } from 'zod/v4';
+import mongoose, { SchemaDefinitionProperty } from 'mongoose';
 
-declare class MongooseZodError extends Error {
-}
-
-type PartialLaconic<T> = {} extends T ? {} : Partial<T>;
-
-declare const MongooseTypeOptionsSymbol: unique symbol;
-declare const MongooseSchemaOptionsSymbol: unique symbol;
-interface MongooseMetadata<DocType, TInstanceMethods extends {} = {}, QueryHelpers extends {} = {}, TStaticMethods extends {} = {}, TVirtuals extends {} = {}> {
-    typeOptions?: {
-        [Field in keyof DocType]?: SchemaTypeOptions<DocType[Field], DocType>;
+/**
+ * 1. DEFINE THE METADATA SHAPE
+ * This interface represents all the Mongoose-specific options you want to
+ * support, including your custom application flags like `hiddenFromPublic`.
+ */
+interface MongooseMeta {
+    type?: any;
+    required?: boolean;
+    unique?: boolean;
+    index?: boolean;
+    default?: any | (() => any);
+    validate?: any;
+    hiddenFromPublic?: boolean;
+    readOnlyForDefaultPatch?: boolean;
+    readOnly?: boolean;
+    exposeCRUDViaSubRoutes?: boolean;
+    timestamps?: boolean | {
+        createdAt?: string | boolean;
+        updatedAt?: string | boolean;
     };
-    schemaOptions?: Omit<SchemaOptions<any, DocType, TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>, 'castNonArrays'>;
+    [key: string]: any;
 }
-interface ZodMongooseDef<ZodType extends z.ZodTypeAny, DocType, TInstanceMethods extends {} = {}, QueryHelpers extends {} = {}, TStaticMethods extends {} = {}, TVirtuals extends {} = {}> extends z.ZodTypeDef {
-    innerType: ZodType;
-    mongoose: MongooseMetadata<DocType, TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>;
-}
-declare class ZodMongoose<ZodType extends z.ZodTypeAny, DocType, TInstanceMethods extends {} = {}, QueryHelpers extends {} = {}, TStaticMethods extends {} = {}, TVirtuals extends {} = {}> extends z.ZodType<DocType & PartialLaconic<TVirtuals>, ZodMongooseDef<ZodType, DocType, TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>> {
-    _parse(input: z.ParseInput): z.ParseReturnType<this['_output']>;
-    static create<ZodType extends z.ZodObject<any>, DocType, TInstanceMethods extends {} = {}, QueryHelpers extends {} = {}, TStaticMethods extends {} = {}, TVirtuals extends {} = {}>(def: ZodMongooseDef<ZodType, DocType, TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>): ZodMongoose<ZodType, DocType, TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>;
-}
-declare module 'zod' {
-    interface ZodTypeDef {
-        [MongooseTypeOptionsSymbol]?: SchemaTypeOptions<any>;
-        [MongooseSchemaOptionsSymbol]?: SchemaOptions;
-        mongooseZodCustomType?: any;
-    }
-    interface ZodSchema {
-        mongooseTypeOptions<T extends ZodSchema<any>>(this: T, options: SchemaTypeOptions<T['_output']>): T;
-    }
-    interface ZodObject<T extends z.ZodRawShape, UnknownKeys extends 'passthrough' | 'strict' | 'strip' = 'strip', Catchall extends z.ZodTypeAny = z.ZodTypeAny, Output = z.objectOutputType<T, Catchall>, Input = z.objectInputType<T, Catchall>> {
-        mongoose: <ZO extends ZodObject<T, UnknownKeys, Catchall, Output, Input>, TInstanceMethods extends {} = {}, QueryHelpers extends {} = {}, TStaticMethods extends {} = {}, TVirtuals extends {} = {}>(this: ZO, metadata?: MongooseMetadata<ZO['_output'], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>) => ZodMongoose<ZO, ZO['_output'], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>;
-    }
-}
-declare const toZodMongooseSchema: <ZO extends ZodObject<any>, TInstanceMethods extends {} = {}, QueryHelpers extends {} = {}, TStaticMethods extends {} = {}, TVirtuals extends {} = {}>(zObject: ZO, metadata?: MongooseMetadata<ZO["_output"], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>) => ZodMongoose<ZO, ZO["_output"], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>;
-declare const addMongooseTypeOptions: <T extends z.ZodSchema<any>>(zObject: T, options: SchemaTypeOptions<T["_output"]>) => T;
-declare module 'mongoose' {
-    interface MZValidateFn<T, ThisType> {
-        (this: ThisType, value: T): boolean;
-    }
-    interface MZLegacyAsyncValidateFn<T, ThisType> {
-        (this: ThisType, value: T, done: (result: boolean) => void): void;
-    }
-    interface MZAsyncValidateFn<T, ThisType> {
-        (this: ThisType, value: T): Promise<boolean>;
-    }
-    interface MZValidateOpts<T, ThisType> {
-        msg?: string;
-        message?: string | ValidatorMessageFn;
-        type?: string;
-        validator: MZValidateFn<T, ThisType> | MZLegacyAsyncValidateFn<T, ThisType> | MZAsyncValidateFn<T, ThisType>;
-    }
-    type MZSchemaValidator<T, ThisType> = RegExp | [RegExp, string] | MZValidateFn<T, ThisType> | [MZValidateFn<T, ThisType>, string] | MZValidateOpts<T, ThisType>;
-    interface MZRequiredFn<ThisType> {
-        (this: ThisType): boolean;
-    }
-    type SchemaTypeOptions<T, ThisType = any> = SchemaTypeOptions<T, ThisType> & {
-        mzValidate?: MZSchemaValidator<Exclude<T, undefined>, ThisType | undefined>;
-        mzRequired?: boolean | MZRequiredFn<ThisType | null> | [boolean, string] | [MZRequiredFn<ThisType | null>, string];
-    };
-}
+/**
+ * 2. CREATE THE ZOD v4 REGISTRY
+ * This securely stores our Mongoose metadata alongside the Zod schema instances
+ * without polluting the actual validation logic.
+ */
+declare const mongooseRegistry: z.core.$ZodRegistry<MongooseMeta, z.core.$ZodType<unknown, unknown, z.core.$ZodTypeInternals<unknown, unknown>>>;
+/**
+ * 3. HELPER FUNCTION
+ * A clean wrapper to attach Mongoose metadata to any Zod schema.
+ */
+declare function withMongoose<T extends z.ZodTypeAny>(schema: T, meta: MongooseMeta): T;
+
+/**
+ * THE CONVERTER (Safe AST Walker)
+ * We extract the Zod type and merge it with any registered Mongoose metadata.
+ */
+declare function extractMongooseDef(schema: z.ZodTypeAny): SchemaDefinitionProperty<any>;
+declare function toMongooseSchema(schema: z.ZodObject<any> | z.ZodTypeAny, options?: mongoose.SchemaOptions): mongoose.Schema;
 
 type StringLiteral<T> = T extends string ? (string extends T ? never : T) : never;
-declare const genTimestampsSchema: <CrAt = "createdAt", UpAt = "updatedAt">(createdAtField?: StringLiteral<CrAt | "createdAt"> | null, updatedAtField?: StringLiteral<UpAt | "updatedAt"> | null) => z.ZodObject<{ [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; }, "strip", z.ZodTypeAny, z.objectUtil.addQuestionMarks<z.baseObjectOutputType<{ [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; }>, any> extends infer T ? { [k in keyof T]: T[k]; } : never, z.baseObjectInputType<{ [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; }> extends infer T_1 ? { [k_1 in keyof T_1]: T_1[k_1]; } : never>;
-type MongooseSchemaTypeParameters<T, Parameter extends 'InstanceMethods' | 'QueryHelpers' | 'TStaticMethods' | 'TVirtuals'> = T extends ZodMongoose<any, any, infer InstanceMethods, infer QueryHelpers, infer TStaticMethods, infer TVirtuals> ? {
-    InstanceMethods: InstanceMethods;
-    QueryHelpers: QueryHelpers;
-    TStaticMethods: TStaticMethods;
-    TVirtuals: TVirtuals;
-}[Parameter] : {};
-declare const bufferMongooseGetter: (value: unknown) => unknown;
+declare const genTimestampsSchema: <CrAt = "createdAt", UpAt = "updatedAt">(createdAtField?: StringLiteral<CrAt | "createdAt"> | null, updatedAtField?: StringLiteral<UpAt | "updatedAt"> | null) => z.ZodObject<{
+    [x: string]: any;
+}, z.core.$strip>;
+declare const bufferMongooseGetter: (value: unknown) => any;
 
-type UnknownKeysHandling = 'throw' | 'strip' | 'strip-unless-overridden';
-interface DisableablePlugins {
-    leanVirtuals?: boolean;
-    leanDefaults?: boolean;
-    leanGetters?: boolean;
-}
-interface ToMongooseSchemaOptions {
-    disablePlugins?: DisableablePlugins | true;
-    unknownKeys?: UnknownKeysHandling;
-}
-interface SetupOptions {
-    z?: typeof z | null;
-    defaultToMongooseSchemaOptions?: ToMongooseSchemaOptions;
-}
-
-declare const toMongooseSchema: <Schema extends ZodMongoose<any, any>>(rootZodSchema: Schema, options?: ToMongooseSchemaOptions) => M.Schema<z$1.TypeOf<Schema>, any, MongooseSchemaTypeParameters<Schema, "InstanceMethods">, MongooseSchemaTypeParameters<Schema, "QueryHelpers">, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">>, MongooseSchemaTypeParameters<Schema, "TStaticMethods">, M.DefaultSchemaOptions, M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>, M.IfAny<M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>>, any, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">> & MongooseSchemaTypeParameters<Schema, "InstanceMethods"> extends infer T ? T extends Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">> & MongooseSchemaTypeParameters<Schema, "InstanceMethods"> ? T extends Record<string, never> ? M.Document<unknown, {}, M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>>, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">>, M.DefaultSchemaOptions> & M.Require_id<M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>>> & {
-    __v: number;
-} : M.IfAny<T, M.Document<unknown, {}, M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>>, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">>, M.DefaultSchemaOptions> & M.Require_id<M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>>> & {
-    __v: number;
-}, M.Document<unknown, {}, M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>>, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">>, M.DefaultSchemaOptions> & Omit<M.Require_id<M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>>> & {
-    __v: number;
-}, keyof T> & T> : never : never>>;
-
-declare const mongooseZodCustomType: <T extends keyof typeof M.Types & keyof typeof M.Schema.Types>(typeName: T, params?: Parameters<ZodTypeAny["refine"]>[1]) => z.ZodType<InstanceType<T extends "Buffer" ? BufferConstructor : (typeof M.Types)[T]>, z.ZodTypeDef, InstanceType<T extends "Buffer" ? BufferConstructor : (typeof M.Types)[T]>>;
-
-declare const setup: (options?: SetupOptions) => void;
-
-export { MongooseSchemaOptionsSymbol, MongooseTypeOptionsSymbol, MongooseZodError, ZodMongoose, addMongooseTypeOptions, bufferMongooseGetter, genTimestampsSchema, mongooseZodCustomType, setup, toMongooseSchema, toZodMongooseSchema };
-export type { DisableablePlugins, SetupOptions, ToMongooseSchemaOptions, UnknownKeysHandling };
+export { bufferMongooseGetter, extractMongooseDef, genTimestampsSchema, mongooseRegistry, toMongooseSchema, withMongoose };
+export type { MongooseMeta };

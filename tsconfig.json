@@ -8,6 +8,7 @@
     "lib": ["esnext"],
     "target": "esnext",
     "baseUrl": ".",
+    "esModuleInterop": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "noImplicitOverride": false,

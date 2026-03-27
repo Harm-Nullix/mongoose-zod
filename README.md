@@ -11,6 +11,26 @@ Declaring mongoose schemas in TypeScript environment has always been tricky in t
 
 This library aims to solve many of the aforementioned problems utilizing `zod` as a schema authoring tool.
 
+### Zod v4 Support
+
+This package is now optimized for **Zod v4**.
+
+Key changes in v4:
+- Use `.mongoose()` on your root Zod objects to enable metadata and transformation.
+- Transformation pipelines (`.transform()`, `.pipe()`, `.preprocess()`, `.refine()`) are correctly unwrapped to find the underlying Mongoose type.
+- Native `BigInt` support is mapped to Mongoose `Long`.
+
+```typescript
+import { z } from 'zod';
+import { toMongooseSchema } from 'mongoose-zod';
+
+const zodSchema = z.object({
+  username: z.string(),
+}).mongoose(); // Required for root schemas in v4
+
+const mongooseSchema = toMongooseSchema(zodSchema);
+```
+
 ## Installation
 
 ⚠️ Please **do not forget** to read the [caveats](#caveats) section when you're done with the main documentation.
