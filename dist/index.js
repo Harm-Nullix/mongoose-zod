@@ -22,33 +22,38 @@ function withMongoose(schema, meta) {
  */
 function unwrapZodSchema(schema, 
 // eslint-disable-next-line unicorn/no-object-as-default-parameter
-features = { required: true }) {
+features = { required: true }, visited = new Set()) {
     if (!schema)
         return { schema, features };
+    if (visited.has(schema))
+        return { schema, features };
+    visited.add(schema);
     const def = schema._def;
     if (!def)
         return { schema, features };
     if (schema instanceof z.ZodOptional) {
+        return unwrapZodSchema(
         // @ts-expect-error Zod v4 schema.unwrap() return type mismatch
-        return unwrapZodSchema(schema.unwrap(), {
+        schema.unwrap(), {
             ...features,
             required: false,
             isOptional: true,
-        });
+        }, visited);
     }
     if (schema instanceof z.ZodNullable) {
+        return unwrapZodSchema(
         // @ts-expect-error Zod v4 schema.unwrap() return type mismatch
-        return unwrapZodSchema(schema.unwrap(), {
+        schema.unwrap(), {
             ...features,
             isNullable: true,
-        });
+        }, visited);
     }
     if (schema instanceof z.ZodDefault) {
         const defaultValue = typeof def.defaultValue === 'function' ? def.defaultValue() : def.defaultValue;
         return unwrapZodSchema(def.innerType, {
             ...features,
             default: defaultValue,
-        });
+        }, visited);
     }
     const { type } = def;
     // In Zod v4, transform, preprocess, and refine are often implemented as pipes.
@@ -59,14 +64,14 @@ features = { required: true }) {
         const outType = def.out?._def?.type;
         if (inType === 'transform') {
             // It's a preprocess (in is transformation, out is schema)
-            return unwrapZodSchema(def.out, features);
+            return unwrapZodSchema(def.out, features, visited);
         }
         if (outType === 'transform' || outType === 'refinement') {
             // It's a transform or refine (in is schema, out is logic)
-            return unwrapZodSchema(def.in, features);
+            return unwrapZodSchema(def.in, features, visited);
         }
         // Default pipe behavior (extract the input part)
-        return unwrapZodSchema(def.in, features);
+        return unwrapZodSchema(def.in, features, visited);
     }
     if (type === 'transform' ||
         type === 'preprocess' ||
@@ -74,17 +79,21 @@ features = { required: true }) {
         type === 'effects') {
         const inner = def.schema || def.innerType;
         if (inner) {
-            const result = unwrapZodSchema(inner, features);
-            // Ensure we check registry for intermediate schemas if needed, 
+            const result = unwrapZodSchema(inner, features, visited);
+            // Ensure we check registry for intermediate schemas if needed,
             // but the registry check is now in extractMongooseDef.
             return result;
         }
     }
     if (type === 'lazy') {
-        return unwrapZodSchema(def.getter(), features);
+        // For lazy types, we need to be careful with infinite recursion.
+        // If we've already seen this specific lazy schema in this unwrapping chain,
+        // we return it as is to stop recursion.
+        // NOTE: In Zod v4, getter() might return different objects each time if not careful.
+        return { schema, features };
     }
     if (type === 'branded') {
-        return unwrapZodSchema(schema.unwrap(), features);
+        return unwrapZodSchema(schema.unwrap(), features, visited);
     }
     return { schema, features };
 }
@@ -93,12 +102,22 @@ features = { required: true }) {
  * THE CONVERTER (Safe AST Walker)
  * We extract the Zod type and merge it with any registered Mongoose metadata.
  */
-function extractMongooseDef(schema) {
+function extractMongooseDef(schema, visited = new Map()) {
     const { schema: unwrapped, features } = unwrapZodSchema(schema);
     // Pull any explicitly registered Mongoose metadata for the ORIGINAL schema instance
     // or any intermediate schemas if it's a chain of effects.
     const meta = mongooseRegistry.get(schema) || mongooseRegistry.get(unwrapped) || {};
     const mongooseProp = { ...meta };
+    if (visited.has(unwrapped)) {
+        const existing = visited.get(unwrapped);
+        if (Object.keys(meta).length > 0) {
+            Object.assign(existing, mongooseProp);
+        }
+        return existing;
+    }
+    // We must ensure recursive calls see the current object to break cycles.
+    // We use mongooseProp for now, and if it's an object/array, we'll fill it.
+    visited.set(unwrapped, mongooseProp);
     if (features.default !== undefined) {
         mongooseProp.default = features.default;
     }
@@ -113,19 +132,27 @@ function extractMongooseDef(schema) {
     if (type === 'object') {
         const { shape } = unwrapped;
         const objDef = {};
+        // We must ensure recursive calls see the current object to break cycles.
+        // If we have a type override, we use mongooseProp, otherwise we use objDef.
+        const placeholder = mongooseProp.type ? mongooseProp : objDef;
+        visited.set(unwrapped, placeholder);
         // eslint-disable-next-line no-restricted-syntax
         for (const key in shape) {
             if (!Object.prototype.hasOwnProperty.call(shape, key))
                 continue;
-            objDef[key] = extractMongooseDef(shape[key]);
+            objDef[key] = extractMongooseDef(shape[key], visited);
         }
         // If the developer didn't provide a strict Mongoose type override, return the shape
-        if (!mongooseProp.type)
+        if (!mongooseProp.type) {
+            Object.assign(mongooseProp, objDef);
             return objDef;
+        }
+        // If there is a type override, merge the object definition into the result
+        Object.assign(mongooseProp, objDef);
     }
     // 2. Handle Arrays
     if (type === 'array') {
-        const innerDef = extractMongooseDef(unwrapped.element);
+        const innerDef = extractMongooseDef(unwrapped.element, visited);
         // If no explicit type override, wrap the inner definition in an array
         if (!mongooseProp.type) {
             mongooseProp.type = [innerDef.type || innerDef];
@@ -194,9 +221,27 @@ function extractMongooseDef(schema) {
             if (!mongooseProp.type)
                 mongooseProp.type = mongoose.Schema.Types.Buffer;
         }
-        else if (cls?.name === 'ObjectId' && !mongooseProp.type) {
+        else if ((cls?.name === 'ObjectId' || cls === mongoose.Types.ObjectId) &&
+            !mongooseProp.type) {
             mongooseProp.type = mongoose.Schema.Types.ObjectId;
         }
+    }
+    // 6. Handle Lazy (Recursion Support)
+    if (type === 'lazy') {
+        const inner = def.getter();
+        // Re-call with the inner schema, passing the visited map to break cycles
+        const result = extractMongooseDef(inner, visited);
+        // If we have metadata, merge the lazy result into it
+        if (Object.keys(meta).length > 0 && result !== mongooseProp) {
+            if (typeof result === 'object' && !Array.isArray(result)) {
+                Object.assign(mongooseProp, result);
+            }
+            else {
+                mongooseProp.type = result.type || result;
+            }
+            return mongooseProp;
+        }
+        return result;
     }
     // Fallback for z.any() or unhandled types
     if (!mongooseProp.type && type !== 'object') {
@@ -219,6 +264,14 @@ function toMongooseSchema(schema, options) {
     return new mongoose.Schema(definition, mergedOptions);
 }
 
+const zObjectId = (options) => withMongoose(z.custom(), {
+    type: mongoose.Schema.Types.ObjectId,
+    ...options,
+});
+const zBuffer = (options) => withMongoose(z.custom(), {
+    type: mongoose.Schema.Types.Buffer,
+    ...options,
+});
 const DateFieldZod = () => z.date().default(() => new Date());
 const genTimestampsSchema = (createdAtField = 'createdAt', updatedAtField = 'updatedAt') => {
     if (createdAtField != null &&
@@ -247,5 +300,5 @@ const genTimestampsSchema = (createdAtField = 'createdAt', updatedAtField = 'upd
 };
 const bufferMongooseGetter = (value) => value != null && value._bsontype === 'Binary' ? value.buffer : value;
 
-export { bufferMongooseGetter, extractMongooseDef, genTimestampsSchema, mongooseRegistry, toMongooseSchema, withMongoose };
+export { bufferMongooseGetter, extractMongooseDef, genTimestampsSchema, mongooseRegistry, toMongooseSchema, withMongoose, zBuffer, zObjectId };
 //# sourceMappingURL=index.js.map

@@ -15,36 +15,51 @@ export function unwrapZodSchema(
   schema: z.ZodTypeAny,
   // eslint-disable-next-line unicorn/no-object-as-default-parameter
   features: SchemaFeatures = {required: true},
+  visited: Set<z.ZodTypeAny> = new Set(),
 ): {schema: z.ZodTypeAny; features: SchemaFeatures} {
   if (!schema) return {schema, features};
+  if (visited.has(schema)) return {schema, features};
+  visited.add(schema);
 
   const def = (schema as any)._def;
   if (!def) return {schema, features};
 
   if (schema instanceof z.ZodOptional) {
-    // @ts-expect-error Zod v4 schema.unwrap() return type mismatch
-    return unwrapZodSchema(schema.unwrap(), {
-      ...features,
-      required: false,
-      isOptional: true,
-    });
+    return unwrapZodSchema(
+      // @ts-expect-error Zod v4 schema.unwrap() return type mismatch
+      schema.unwrap(),
+      {
+        ...features,
+        required: false,
+        isOptional: true,
+      },
+      visited,
+    );
   }
 
   if (schema instanceof z.ZodNullable) {
-    // @ts-expect-error Zod v4 schema.unwrap() return type mismatch
-    return unwrapZodSchema(schema.unwrap(), {
-      ...features,
-      isNullable: true,
-    });
+    return unwrapZodSchema(
+      // @ts-expect-error Zod v4 schema.unwrap() return type mismatch
+      schema.unwrap(),
+      {
+        ...features,
+        isNullable: true,
+      },
+      visited,
+    );
   }
 
   if (schema instanceof z.ZodDefault) {
     const defaultValue =
       typeof def.defaultValue === 'function' ? def.defaultValue() : def.defaultValue;
-    return unwrapZodSchema(def.innerType, {
-      ...features,
-      default: defaultValue,
-    });
+    return unwrapZodSchema(
+      def.innerType,
+      {
+        ...features,
+        default: defaultValue,
+      },
+      visited,
+    );
   }
 
   const {type} = def;
@@ -58,16 +73,16 @@ export function unwrapZodSchema(
 
     if (inType === 'transform') {
       // It's a preprocess (in is transformation, out is schema)
-      return unwrapZodSchema(def.out, features);
+      return unwrapZodSchema(def.out, features, visited);
     }
 
     if (outType === 'transform' || outType === 'refinement') {
       // It's a transform or refine (in is schema, out is logic)
-      return unwrapZodSchema(def.in, features);
+      return unwrapZodSchema(def.in, features, visited);
     }
 
     // Default pipe behavior (extract the input part)
-    return unwrapZodSchema(def.in, features);
+    return unwrapZodSchema(def.in, features, visited);
   }
 
   if (
@@ -78,7 +93,7 @@ export function unwrapZodSchema(
   ) {
     const inner = def.schema || def.innerType;
     if (inner) {
-      const result = unwrapZodSchema(inner, features);
+      const result = unwrapZodSchema(inner, features, visited);
       // Ensure we check registry for intermediate schemas if needed,
       // but the registry check is now in extractMongooseDef.
       return result;
@@ -86,11 +101,15 @@ export function unwrapZodSchema(
   }
 
   if (type === 'lazy') {
-    return unwrapZodSchema(def.getter(), features);
+    // For lazy types, we need to be careful with infinite recursion.
+    // If we've already seen this specific lazy schema in this unwrapping chain,
+    // we return it as is to stop recursion.
+    // NOTE: In Zod v4, getter() might return different objects each time if not careful.
+    return {schema, features};
   }
 
   if (type === 'branded') {
-    return unwrapZodSchema((schema as any).unwrap(), features);
+    return unwrapZodSchema((schema as any).unwrap(), features, visited);
   }
 
   return {schema, features};

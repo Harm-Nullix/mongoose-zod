@@ -19,7 +19,28 @@ Key features:
 - **Registry-based metadata**: Securely store Mongoose-specific metadata alongside Zod schemas using `z.registry`.
 - **Transformation Pipelines**: Automatically unwraps `.transform()`, `.pipe()`, `.preprocess()`, and `.refine()` to find the underlying Mongoose type.
 - **Native BigInt**: Maps Zod `bigint` to native Mongoose `BigInt`.
-- **Specialized Types**: Direct support for `Buffer` and `ObjectId` via `z.instanceof()`.
+- **Specialized Types**: Direct support for `Buffer` and `ObjectId` via `zObjectId()` and `zBuffer()` helpers (or `z.instanceof()`).
+
+### Type Conversion Table
+
+The following table shows how Zod types are mapped to Mongoose types by default.
+
+| Zod Type | Mongoose Type | Notes |
+| :--- | :--- | :--- |
+| `z.string()` | `String` | Required by default unless `.optional()` is used. |
+| `z.number()` | `Number` | |
+| `z.boolean()` | `Boolean` | |
+| `z.date()` | `Date` | |
+| `z.bigint()` | `BigInt` | Fallback to `Number` if `BigInt` is not supported by the environment. |
+| `z.enum()` | `String` | Includes Mongoose `enum` validation. |
+| `z.nativeEnum()` | `String` | Includes Mongoose `enum` validation. |
+| `z.array()` | `[]` | Mapped to a Mongoose array of the inner type. |
+| `z.object()` | `Nested Object` | Mapped to a nested Mongoose schema or subdocument. |
+| `zObjectId()` | `mongoose.Schema.Types.ObjectId` | Specialized helper for ObjectIds. |
+| `zBuffer()` | `mongoose.Schema.Types.Buffer` | Specialized helper for Buffers. |
+| `z.instanceof(Buffer)` | `mongoose.Schema.Types.Buffer` | |
+| `z.instanceof(ObjectId)` | `mongoose.Schema.Types.ObjectId` | |
+| `z.any()` / `z.unknown()` | `mongoose.Schema.Types.Mixed` | Fallback for unhandled types. |
 
 ## Installation
 
@@ -90,29 +111,46 @@ const mongooseSchema = toMongooseSchema(userSchema);
 
 ### Buffers and ObjectIds
 
+For specialized Mongoose types, use the provided `zObjectId()` and `zBuffer()` helpers. They also accept optional metadata.
+
 ```typescript
 import { z } from 'zod/v4';
-import mongoose from 'mongoose';
-import { toMongooseSchema } from 'mongoose-zod';
+import { toMongooseSchema, zObjectId, zBuffer } from 'mongoose-zod';
 
 const schema = z.object({
-  avatar: z.instanceof(Buffer),
-  ownerId: z.instanceof(mongoose.Types.ObjectId),
+  avatar: zBuffer({ required: true }),
+  ownerId: zObjectId({ index: true }),
+  // Arrays are also supported
+  tags: z.array(zObjectId()),
 });
 
 const mongooseSchema = toMongooseSchema(schema);
 ```
 
+You can also use `z.instanceof(Buffer)` or `z.instanceof(mongoose.Types.ObjectId)` directly, which will be correctly inferred.
+
 ## API Reference
 
 ### `toMongooseSchema(zodSchema, options?)`
-Converts a Zod schema to a Mongoose schema.
+Converts a Zod schema to a Mongoose schema instance.
 - `zodSchema`: A Zod object or any Zod type.
 - `options`: Optional Mongoose `SchemaOptions`.
 
+### `extractMongooseDef(zodSchema)`
+Converts a Zod schema to a Mongoose schema definition object (the POJO used as the first argument to `new mongoose.Schema(...)`).
+- `zodSchema`: A Zod object or any Zod type.
+
 ### `withMongoose(zodSchema, metadata)`
 Attaches Mongoose metadata to a Zod schema instance via the registry.
-- `metadata`: Object containing Mongoose field options (`unique`, `index`, `default`, etc.).
+- `metadata`: Object containing Mongoose field options (`unique`, `index`, `default`, `type`, etc.).
+
+### `zObjectId(options?)`
+Helper to create a Zod schema representing a Mongoose `ObjectId`.
+- `options`: Optional `MongooseMeta` for this field.
+
+### `zBuffer(options?)`
+Helper to create a Zod schema representing a Mongoose `Buffer`.
+- `options`: Optional `MongooseMeta` for this field.
 
 ### `genTimestampsSchema(createdAtField?, updatedAtField?)`
 Returns a Zod object with timestamp fields.
@@ -125,9 +163,10 @@ Returns a Zod object with timestamp fields.
 
 The following features from older versions of `mongoose-zod` (Mongoose 7 / Zod 3) are no longer supported or have changed:
 
+- **`mongooseZodCustomType()`**: This was previously used to directly define a Mongoose type on a Zod schema. In the new version, use `withMongoose(z.any(), { type: mongoose.Schema.Types.YourType })` or specialized helpers like `zObjectId()` and `zBuffer()`.
+- **`toZodMongooseSchema()`**: Previously, this returned a `ZodMongoose` wrapper used to generate the Mongoose schema. This function has been replaced by `extractMongooseDef()` which returns the raw Mongoose schema definition (POJO), or `toMongooseSchema()` which returns a full `mongoose.Schema` instance.
+- **`toMongooseSchema()`**: In the old version, this was a method on the `ZodMongoose` instance. Now it's a standalone function that accepts a Zod schema and returns a `mongoose.Schema` object.
+- **`ZodMongoose` class**: Replaced by standard Zod types with registry-stored metadata.
 - **`setup({ z })`**: No longer required. The library uses the `zod/v4` registry directly and does not modify the Zod prototype.
 - **`.mongoose()`, `.mongooseTypeOptions()`, `.mongooseSchemaOptions()`**: These prototype extensions are deprecated. Use `withMongoose()` instead.
-- **`mongooseZodCustomType()`**: Use `z.instanceof(Buffer)` or `z.instanceof(mongoose.Types.ObjectId)` for standard specialized types.
-- **`toZodMongooseSchema()`**: Use `toMongooseSchema()` instead.
 - **Automatic Plugin Loading**: Optional peer dependencies like `mongoose-lean-*` are no longer automatically attached. Plugins should be applied to the Mongoose schema manually.
-- **`ZodMongoose` class**: Replaced by standard Zod types with registry-stored metadata.

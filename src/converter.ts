@@ -7,13 +7,28 @@ import {unwrapZodSchema} from './zod-helpers.js';
  * THE CONVERTER (Safe AST Walker)
  * We extract the Zod type and merge it with any registered Mongoose metadata.
  */
-export function extractMongooseDef(schema: z.ZodTypeAny): SchemaDefinitionProperty<any> {
+export function extractMongooseDef(
+  schema: z.ZodTypeAny,
+  visited: Map<z.ZodTypeAny, any> = new Map(),
+): SchemaDefinitionProperty<any> {
   const {schema: unwrapped, features} = unwrapZodSchema(schema);
 
   // Pull any explicitly registered Mongoose metadata for the ORIGINAL schema instance
   // or any intermediate schemas if it's a chain of effects.
   const meta = mongooseRegistry.get(schema) || mongooseRegistry.get(unwrapped) || {};
   const mongooseProp: any = {...meta};
+
+  if (visited.has(unwrapped)) {
+    const existing = visited.get(unwrapped);
+    if (Object.keys(meta).length > 0) {
+      Object.assign(existing, mongooseProp);
+    }
+    return existing;
+  }
+
+  // We must ensure recursive calls see the current object to break cycles.
+  // We use mongooseProp for now, and if it's an object/array, we'll fill it.
+  visited.set(unwrapped, mongooseProp);
 
   if (features.default !== undefined) {
     mongooseProp.default = features.default;
@@ -30,18 +45,30 @@ export function extractMongooseDef(schema: z.ZodTypeAny): SchemaDefinitionProper
   if (type === 'object') {
     const {shape} = unwrapped as any;
     const objDef: any = {};
+
+    // We must ensure recursive calls see the current object to break cycles.
+    // If we have a type override, we use mongooseProp, otherwise we use objDef.
+    const placeholder = mongooseProp.type ? mongooseProp : objDef;
+    visited.set(unwrapped, placeholder);
+
     // eslint-disable-next-line no-restricted-syntax
     for (const key in shape) {
       if (!Object.prototype.hasOwnProperty.call(shape, key)) continue;
-      objDef[key] = extractMongooseDef(shape[key]);
+      objDef[key] = extractMongooseDef(shape[key], visited);
     }
     // If the developer didn't provide a strict Mongoose type override, return the shape
-    if (!mongooseProp.type) return objDef;
+    if (!mongooseProp.type) {
+      Object.assign(mongooseProp, objDef);
+      return objDef;
+    }
+
+    // If there is a type override, merge the object definition into the result
+    Object.assign(mongooseProp, objDef);
   }
 
   // 2. Handle Arrays
   if (type === 'array') {
-    const innerDef = extractMongooseDef((unwrapped as any).element);
+    const innerDef = extractMongooseDef((unwrapped as any).element, visited);
     // If no explicit type override, wrap the inner definition in an array
     if (!mongooseProp.type) {
       mongooseProp.type = [(innerDef as any).type || innerDef];
@@ -103,9 +130,29 @@ export function extractMongooseDef(schema: z.ZodTypeAny): SchemaDefinitionProper
     const cls = def.cls || (unwrapped as any).cls;
     if (cls === Buffer) {
       if (!mongooseProp.type) mongooseProp.type = mongoose.Schema.Types.Buffer;
-    } else if (cls?.name === 'ObjectId' && !mongooseProp.type) {
+    } else if (
+      (cls?.name === 'ObjectId' || cls === mongoose.Types.ObjectId) &&
+      !mongooseProp.type
+    ) {
       mongooseProp.type = mongoose.Schema.Types.ObjectId;
     }
+  }
+
+  // 6. Handle Lazy (Recursion Support)
+  if (type === 'lazy') {
+    const inner = def.getter();
+    // Re-call with the inner schema, passing the visited map to break cycles
+    const result = extractMongooseDef(inner, visited);
+    // If we have metadata, merge the lazy result into it
+    if (Object.keys(meta).length > 0 && result !== mongooseProp) {
+      if (typeof result === 'object' && !Array.isArray(result)) {
+        Object.assign(mongooseProp, result);
+      } else {
+        mongooseProp.type = (result as any).type || result;
+      }
+      return mongooseProp;
+    }
+    return result;
   }
 
   // Fallback for z.any() or unhandled types

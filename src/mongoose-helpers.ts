@@ -1,7 +1,20 @@
 import {z} from 'zod/v4';
-import {withMongoose} from './registry.js';
+import mongoose from 'mongoose';
+import {withMongoose, MongooseMeta} from './registry.js';
 
 type StringLiteral<T> = T extends string ? (string extends T ? never : T) : never;
+
+export const zObjectId = (options?: MongooseMeta) =>
+  withMongoose(z.custom<mongoose.Types.ObjectId>(), {
+    type: mongoose.Schema.Types.ObjectId,
+    ...options,
+  });
+
+export const zBuffer = (options?: MongooseMeta) =>
+  withMongoose(z.custom<Buffer>(), {
+    type: mongoose.Schema.Types.Buffer,
+    ...options,
+  });
 
 const DateFieldZod = () => z.date().default(() => new Date());
 

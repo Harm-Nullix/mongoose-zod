@@ -1,14 +1,13 @@
 import {expect, test, describe} from 'bun:test';
 import {z} from 'zod/v4';
-import mongoose from 'mongoose';
 import {toMongooseSchema} from '../src/converter.js';
+import {genTimestampsSchema, zObjectId, zBuffer} from '../src/mongoose-helpers.js';
 import {withMongoose} from '../src/registry.js';
-import {genTimestampsSchema} from '../src/mongoose-helpers.js';
 
 describe('Extended Conversion', () => {
   test('should convert Buffer correctly', () => {
     const schema = z.object({
-      data: withMongoose(z.instanceof(Buffer), {type: mongoose.Schema.Types.Buffer}),
+      data: zBuffer(),
     });
     const mongooseSchema = toMongooseSchema(schema);
     const dataProp = mongooseSchema.path('data');
@@ -18,14 +17,29 @@ describe('Extended Conversion', () => {
 
   test('should convert ObjectId correctly', () => {
     const schema = z.object({
-      refId: withMongoose(z.instanceof(mongoose.Types.ObjectId), {
-        type: mongoose.Schema.Types.ObjectId,
-      }),
+      refId: zObjectId(),
     });
     const mongooseSchema = toMongooseSchema(schema);
     const refIdProp = mongooseSchema.path('refId');
 
     expect(refIdProp.instance).toBe('ObjectId');
+  });
+
+  test('should support options for zObjectId and zBuffer', () => {
+    const schema = z.object({
+      refId: zObjectId({index: true, unique: true}),
+      data: zBuffer({required: true}),
+    });
+    const mongooseSchema = toMongooseSchema(schema);
+
+    const refIdProp = mongooseSchema.path('refId') as any;
+    expect(refIdProp.instance).toBe('ObjectId');
+    expect(refIdProp.options.index).toBe(true);
+    expect(refIdProp.options.unique).toBe(true);
+
+    const dataProp = mongooseSchema.path('data') as any;
+    expect(dataProp.instance).toBe('Buffer');
+    expect(dataProp.isRequired).toBe(true);
   });
 
   test('should support timestamps via genTimestampsSchema', () => {

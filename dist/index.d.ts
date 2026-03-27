@@ -39,14 +39,16 @@ declare function withMongoose<T extends z.ZodTypeAny>(schema: T, meta: MongooseM
  * THE CONVERTER (Safe AST Walker)
  * We extract the Zod type and merge it with any registered Mongoose metadata.
  */
-declare function extractMongooseDef(schema: z.ZodTypeAny): SchemaDefinitionProperty<any>;
+declare function extractMongooseDef(schema: z.ZodTypeAny, visited?: Map<z.ZodTypeAny, any>): SchemaDefinitionProperty<any>;
 declare function toMongooseSchema(schema: z.ZodObject<any> | z.ZodTypeAny, options?: mongoose.SchemaOptions): mongoose.Schema;
 
 type StringLiteral<T> = T extends string ? (string extends T ? never : T) : never;
+declare const zObjectId: (options?: MongooseMeta) => z.ZodCustom<mongoose.Types.ObjectId, mongoose.Types.ObjectId>;
+declare const zBuffer: (options?: MongooseMeta) => z.ZodCustom<Buffer<ArrayBufferLike>, Buffer<ArrayBufferLike>>;
 declare const genTimestampsSchema: <CrAt = "createdAt", UpAt = "updatedAt">(createdAtField?: StringLiteral<CrAt | "createdAt"> | null, updatedAtField?: StringLiteral<UpAt | "updatedAt"> | null) => z.ZodObject<{
     [x: string]: any;
 }, z.core.$strip>;
 declare const bufferMongooseGetter: (value: unknown) => any;
 
-export { bufferMongooseGetter, extractMongooseDef, genTimestampsSchema, mongooseRegistry, toMongooseSchema, withMongoose };
+export { bufferMongooseGetter, extractMongooseDef, genTimestampsSchema, mongooseRegistry, toMongooseSchema, withMongoose, zBuffer, zObjectId };
 export type { MongooseMeta };
