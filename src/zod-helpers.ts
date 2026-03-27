@@ -1,81 +1,97 @@
 import {z} from 'zod/v4';
 
-export const getDef = (schema: any) => schema?.def || schema?._def || schema?._zod?.def;
-
-export const getTypeName = (schema: any): string | undefined => {
-  const def = getDef(schema);
-  if (!def) return undefined;
-
-  // Zod v4 uses .type for some internal things, or .typeName
-  return (
-    def.type ||
-    def.typeName ||
-    (schema as any)._typeName ||
-    schema.constructor?.name?.replace('Zod', '').toLowerCase()
-  );
-};
-
 export interface SchemaFeatures {
   default?: any;
   required?: boolean;
   isOptional?: boolean;
   isNullable?: boolean;
-  mongoose?: any;
-  arrayStack?: number;
 }
 
-export const unwrapZodSchema = (
+/**
+ * Recursively unwrap Zod schemas (Optional, Nullable, Default, Effects, Pipelines)
+ * using Zod's public API and internal _def.type identifiers.
+ */
+export function unwrapZodSchema(
   schema: z.ZodTypeAny,
   // eslint-disable-next-line unicorn/no-object-as-default-parameter
-  features: SchemaFeatures = {required: true, arrayStack: 0},
-): {schema: z.ZodTypeAny; features: SchemaFeatures} => {
+  features: SchemaFeatures = {required: true},
+): {schema: z.ZodTypeAny; features: SchemaFeatures} {
   if (!schema) return {schema, features};
 
-  const def = getDef(schema);
+  const def = (schema as any)._def;
   if (!def) return {schema, features};
 
-  const type = getTypeName(schema);
+  if (schema instanceof z.ZodOptional) {
+    // @ts-expect-error Zod v4 schema.unwrap() return type mismatch
+    return unwrapZodSchema(schema.unwrap(), {
+      ...features,
+      required: false,
+      isOptional: true,
+    });
+  }
 
-  switch (type) {
-    case 'optional': {
-      return unwrapZodSchema((schema as any).unwrap ? (schema as any).unwrap() : def.innerType, {
-        ...features,
-        required: false,
-        isOptional: true,
-      });
+  if (schema instanceof z.ZodNullable) {
+    // @ts-expect-error Zod v4 schema.unwrap() return type mismatch
+    return unwrapZodSchema(schema.unwrap(), {
+      ...features,
+      isNullable: true,
+    });
+  }
+
+  if (schema instanceof z.ZodDefault) {
+    const defaultValue =
+      typeof def.defaultValue === 'function' ? def.defaultValue() : def.defaultValue;
+    return unwrapZodSchema(def.innerType, {
+      ...features,
+      default: defaultValue,
+    });
+  }
+
+  const {type} = def;
+
+  // In Zod v4, transform, preprocess, and refine are often implemented as pipes.
+  // For transform: in = schema, out = transformation
+  // For preprocess: in = preprocessing, out = schema
+  if (type === 'pipe') {
+    const inType = def.in?._def?.type;
+    const outType = def.out?._def?.type;
+
+    if (inType === 'transform') {
+      // It's a preprocess (in is transformation, out is schema)
+      return unwrapZodSchema(def.out, features);
     }
-    case 'nullable': {
-      return unwrapZodSchema((schema as any).unwrap ? (schema as any).unwrap() : def.innerType, {
-        ...features,
-        isNullable: true,
-      });
+
+    if (outType === 'transform' || outType === 'refinement') {
+      // It's a transform or refine (in is schema, out is logic)
+      return unwrapZodSchema(def.in, features);
     }
-    case 'default': {
-      return unwrapZodSchema(def.innerType || (schema as any)._def.innerType, {
-        ...features,
-        default: typeof def.defaultValue === 'function' ? def.defaultValue() : def.defaultValue,
-      });
-    }
-    case 'transform':
-    case 'preprocess':
-    case 'refinement':
-    case 'effects': {
-      return unwrapZodSchema(def.schema || def.innerType || (schema as any)._def.schema, features);
-    }
-    case 'pipe': {
-      return unwrapZodSchema(def.in || (schema as any)._def.in, features);
-    }
-    case 'lazy': {
-      return unwrapZodSchema((schema as any)._def.getter(), features);
-    }
-    case 'branded': {
-      return unwrapZodSchema(
-        (schema as any).unwrap ? (schema as any).unwrap() : def.innerType,
-        features,
-      );
-    }
-    default: {
-      return {schema, features};
+
+    // Default pipe behavior (extract the input part)
+    return unwrapZodSchema(def.in, features);
+  }
+
+  if (
+    type === 'transform' ||
+    type === 'preprocess' ||
+    type === 'refinement' ||
+    type === 'effects'
+  ) {
+    const inner = def.schema || def.innerType;
+    if (inner) {
+      const result = unwrapZodSchema(inner, features);
+      // Ensure we check registry for intermediate schemas if needed,
+      // but the registry check is now in extractMongooseDef.
+      return result;
     }
   }
-};
+
+  if (type === 'lazy') {
+    return unwrapZodSchema(def.getter(), features);
+  }
+
+  if (type === 'branded') {
+    return unwrapZodSchema((schema as any).unwrap(), features);
+  }
+
+  return {schema, features};
+}
