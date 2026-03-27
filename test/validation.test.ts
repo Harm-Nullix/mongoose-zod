@@ -44,10 +44,10 @@ describe('Validation', () => {
     ['array of objects', z.object({a: z.string(), b: z.number()}).array().min(2), [{a: '1', b: 2}]],
   ] as const)(
     'Throws ValidationError if zod validation is not passed for type %s',
-    (_, propSchema, value) => {
+    (type, propSchema, value) => {
       const zodSchema = z.object({a: propSchema}).mongoose();
 
-      const Model = M.model('test', toMongooseSchema(zodSchema));
+      const Model = M.model(`test-${type}-fail`, toMongooseSchema(zodSchema));
       const instance = new Model({a: value});
 
       // expect(instance.validateSync()).toBeInstanceOf(M.Error.ValidationError);
@@ -97,10 +97,10 @@ describe('Validation', () => {
     ['unknown', z.any(), {a: [1, '2', [[]]], b: {c: {d: [42, {e: 'f'}]}}}],
   ] as const)(
     'Does not throw ValidationError if zod validation succeeds for type %s',
-    (_, propSchema, value) => {
+    (type, propSchema, value) => {
       const zodSchema = z.object({a: propSchema}).mongoose();
 
-      const Model = M.model('test', toMongooseSchema(zodSchema));
+      const Model = M.model(`test-${type}-success`, toMongooseSchema(zodSchema));
       const instance = new Model({a: value});
 
       expect(instance.validateSync()).not.toBeInstanceOf(M.Error.ValidationError);

@@ -101,7 +101,7 @@ describe('Generate timestamps schema helper', () => {
   it('`createdAt` and `updatedAt` works as indended', () => {
     const Schema = toMongooseSchema(genTimestampsSchema().mongoose());
 
-    const Model = M.model('model', Schema);
+    const Model = M.model('model1', Schema);
 
     const doc = new Model();
 
@@ -113,7 +113,7 @@ describe('Generate timestamps schema helper', () => {
   it('`createdAt` and `updatedAt` works as indended (custom names)', () => {
     const Schema = toMongooseSchema(genTimestampsSchema('cd', 'ud').mongoose());
 
-    const Model = M.model('model', Schema);
+    const Model = M.model('model3', Schema);
 
     const doc = new Model();
 

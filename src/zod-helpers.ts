@@ -37,7 +37,7 @@ export interface ZodTypes {
   ZodString: z.ZodString;
   ZodTuple: z.ZodTuple<any>;
   ZodUnion: z.ZodUnion<any>;
-  ZodDiscriminatedUnion: z.ZodDiscriminatedUnion<any, any, any>;
+  ZodDiscriminatedUnion: z.ZodDiscriminatedUnion<any, any>;
   ZodUnknown: z.ZodUnknown;
   ZodVoid: z.ZodVoid;
 
@@ -49,7 +49,12 @@ export const isZodType = <TypeName extends keyof ZodTypes>(
   schema: object,
   typeName: TypeName,
 ): schema is ZodTypes[TypeName] => {
-  return schema.constructor.name === typeName;
+  const constructorName = schema.constructor.name;
+  if (constructorName === typeName) {
+    return true;
+  }
+  // Also check _def.typeName which is more reliable in some environments (like Bun or minified code)
+  return (schema as any)._def?.typeName === typeName;
 };
 
 export interface SchemaFeatures {
@@ -120,17 +125,21 @@ export const unwrapZodSchema = (
     return unwrapZodSchema(schema._def.schema, options, _features);
   }
 
-  //unwrap special ZodEffect of preprocess with description "ObjectId", unwrap will trigger if above this one.
-  //It will fix string input to ObjectId conversion if used with: 
+  // unwrap special ZodEffect of preprocess with description "ObjectId", unwrap will trigger if above this one.
+  // It will fix string input to ObjectId conversion if used with:
   // export const getZodObjectIdField = () => z.preprocess(
   //   v => (typeof v === 'string' && v.match(/^[a-f\d]{24}$/i) ? new Types.ObjectId(v) : v),
   //   mongooseZodCustomType('ObjectId').describe('ObjectId')
   // )
 
-  if (isZodType(schema, 'ZodEffects') && schema._def.effect.type === 'preprocess' && schema._def.schema.description === 'ObjectId') {
+  if (
+    isZodType(schema, 'ZodEffects') &&
+    schema._def.effect.type === 'preprocess' &&
+    schema._def.schema.description === 'ObjectId'
+  ) {
     return unwrapZodSchema(schema._def.schema, options, _features);
   }
-  
+
   if (isZodType(schema, 'ZodArray') && !options.doNotUnwrapArrays) {
     const wrapInArrayTimes = Number(_features.array?.wrapInArrayTimes || 0) + 1;
     return unwrapZodSchema(schema._def.type, options, {

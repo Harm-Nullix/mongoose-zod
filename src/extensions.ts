@@ -81,6 +81,7 @@ declare module 'zod' {
   interface ZodTypeDef {
     [MongooseTypeOptionsSymbol]?: MongooseSchemaTypeOptions<any>;
     [MongooseSchemaOptionsSymbol]?: SchemaOptions;
+    mongooseZodCustomType?: any;
   }
 
   interface ZodSchema {

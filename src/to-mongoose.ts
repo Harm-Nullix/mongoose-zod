@@ -182,12 +182,12 @@ const addMongooseSchemaFields = (
     fieldType = relevantSchema;
   } else if (isZodType(zodSchemaFinal, 'ZodNumber') || unionSchemaType === 'ZodNumber') {
     fieldType = MongooseZodNumber;
-  } else if (isZodType(zodSchemaFinal, 'ZodBigInt') || unionSchemaType === 'ZodBigInt') {
-    fieldType = MongooseZodBigInt;
   } else if (isZodType(zodSchemaFinal, 'ZodString') || unionSchemaType === 'ZodString') {
     fieldType = MongooseZodString;
   } else if (isZodType(zodSchemaFinal, 'ZodDate') || unionSchemaType === 'ZodDate') {
     fieldType = MongooseZodDate;
+  } else if (isZodType(zodSchemaFinal, 'ZodBigInt') || unionSchemaType === 'ZodBigInt') {
+    fieldType = MongooseZodBigInt;
   } else if (isZodType(zodSchemaFinal, 'ZodBoolean') || unionSchemaType === 'ZodBoolean') {
     fieldType = MongooseZodBoolean;
   } else if (isZodType(zodSchemaFinal, 'ZodLiteral')) {
@@ -207,11 +207,7 @@ const addMongooseSchemaFields = (
         break;
       }
       case 'bigint': {
-        fieldType = Number.isNaN(literalValue)
-          ? MongooseMixed
-          : Number.isFinite(literalValue)
-          ? MongooseZodBigInt
-          : undefined;
+        fieldType = MongooseZodBigInt;
         break;
       }
       case 'string': {
@@ -250,18 +246,30 @@ const addMongooseSchemaFields = (
     } else if (valuesJsTypes.length === 1 && valuesJsTypes[0] === 'string') {
       fieldType = MongooseZodString;
     } else if (
-      valuesJsTypes.length === 2 &&
-      (['string', 'number', 'bigint'] as const).every((t) => valuesJsTypes.includes(t))
+      valuesJsTypes.length >= 2 &&
+      valuesJsTypes.every((t) => (['string', 'number', 'bigint'] as const).includes(t as any))
     ) {
       fieldType = MongooseMixed;
     } else {
       errMsgAddendum =
         'only nonempty native enums with number, bigint and strings values are supported';
     }
-  } else if (isZodType(zodSchema, 'ZodNaN') || isZodType(zodSchema, 'ZodNull')) {
+  } else if (
+    isZodType(zodSchemaFinal, 'ZodDiscriminatedUnion') ||
+    isZodType(zodSchemaFinal, 'ZodIntersection')
+  ) {
     fieldType = MongooseMixed;
-  } else if (isZodType(zodSchemaFinal, 'ZodMap')) {
-    fieldType = Map;
+  } else if (
+    isZodType(zodSchema, 'ZodNaN') ||
+    isZodType(zodSchemaFinal, 'ZodNaN') ||
+    isZodType(zodSchema, 'ZodNull') ||
+    isZodType(zodSchemaFinal, 'ZodNull') ||
+    isZodType(zodSchemaFinal, 'ZodUnknown') ||
+    isZodType(zodSchemaFinal, 'ZodRecord') ||
+    isZodType(zodSchemaFinal, 'ZodUnion') ||
+    isZodType(zodSchemaFinal, 'ZodTuple')
+  ) {
+    fieldType = MongooseMixed;
   } else if (isZodType(zodSchemaFinal, 'ZodAny')) {
     const instanceOfClass = zodInstanceofOriginalClasses.get(zodSchemaFinal);
     fieldType = instanceOfClass || MongooseMixed;
@@ -270,22 +278,13 @@ const addMongooseSchemaFields = (
     if (instanceOfClass === M.Schema.Types.Buffer && !('get' in commonFieldOptions)) {
       commonFieldOptions.get = bufferMongooseGetter;
     }
-  } else if (isZodType(zodSchemaFinal, 'ZodEffects')) {
-    // `refinement` effects are already unwrapped at this stage
-    if (zodSchemaFinal._def.effect.type !== 'refinement') {
-      errMsgAddendum = 'only refinements are supported';
-    }
+  } else if (isZodType(zodSchemaFinal, 'ZodMap')) {
+    fieldType = Map;
   } else if (
-    isZodType(zodSchemaFinal, 'ZodUnknown') ||
-    isZodType(zodSchemaFinal, 'ZodRecord') ||
-    isZodType(zodSchemaFinal, 'ZodUnion') ||
-    isZodType(zodSchemaFinal, 'ZodTuple') ||
-    isZodType(zodSchemaFinal, 'ZodDiscriminatedUnion') ||
-    isZodType(zodSchemaFinal, 'ZodIntersection') ||
-    isZodType(zodSchemaFinal, 'ZodTypeAny') ||
-    isZodType(zodSchemaFinal, 'ZodType')
+    isZodType(zodSchemaFinal, 'ZodEffects') && // `refinement` effects are already unwrapped at this stage
+    (zodSchemaFinal as any)._def.effect.type !== 'refinement'
   ) {
-    fieldType = MongooseMixed;
+    errMsgAddendum = 'only refinements are supported';
   }
 
   if (isRoot) {
@@ -294,8 +293,14 @@ const addMongooseSchemaFields = (
 
   // undefined, void, bigint, never, sets, promise, function, lazy, effects
   if (fieldType == null) {
-    const typeName = zodSchemaFinal.constructor.name;
-    throwError(`${typeName} type is not supported${errMsgAddendum ? ` (${errMsgAddendum})` : ''}`);
+    if ((zodSchemaFinal as any)._def.mongooseZodCustomType) {
+      fieldType = (zodSchemaFinal as any)._def.mongooseZodCustomType;
+    } else {
+      const typeName = (zodSchemaFinal as any)._def.typeName || zodSchemaFinal.constructor.name;
+      throwError(
+        `${typeName} type is not supported${errMsgAddendum ? ` (${errMsgAddendum})` : ''}`,
+      );
+    }
   }
 
   if (schemaFeatures.array) {

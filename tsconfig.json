@@ -22,7 +22,7 @@
   "compilerOptions": {
     "outDir": "./dist",
     "module": "esnext",
-    "target": "es2017",
+    "target": "esnext",
     "resolveJsonModule": true,
     "noUncheckedIndexedAccess": true,
     "importsNotUsedAsValues": "error",
@@ -35,5 +35,5 @@
 
   "ts-node": {
     "esm": true
-  },
+  }
 }

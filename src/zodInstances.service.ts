@@ -20,6 +20,7 @@ export const mongooseZodCustomType = <T extends keyof typeof M.Types & keyof typ
     InstanceType<TFixed>
   >;
   zodInstanceofOriginalClasses.set((result as z.ZodEffects<any>)._def.schema, typeClass);
+  (result as any)._def.mongooseZodCustomType = typeClass;
 
   return result;
 };
