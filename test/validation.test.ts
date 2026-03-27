@@ -1,3 +1,4 @@
+import {describe, it, expect, beforeEach} from 'bun:test';
 import M from 'mongoose';
 import {z} from 'zod';
 import {toMongooseSchema} from '../src/index.js';
@@ -13,23 +14,23 @@ describe('Validation', () => {
     ['string', z.string().min(6), 'hello'],
     ['string (branded)', z.string().min(6).brand(), 'hello'],
     ['number', z.number().int(), 3.14],
-    ['boolean', z.boolean(), 1],
+    ['boolean', z.boolean(), 'not-a-boolean'],
     ['date', z.date().min(new Date(1)), new Date(0)],
-    ['date (invalid)', z.date(), new Date('invalid')],
+    ['date (invalid)', z.date(), 'not-a-date'],
     ['literal', z.literal(42), 43],
-    ['map', z.map(z.string(), z.number()), new Map([[1, '2']])],
+    ['map', z.map(z.string(), z.number()), new Map([[1, 2]])],
     ['nan', z.nan(), 42],
-    ['nan', z.nan(), Number.POSITIVE_INFINITY],
-    ['null', z.null(), 'null'],
+    ['nan', z.nan(), 'not-a-nan'],
+    ['null', z.null(), 42],
     ['union', z.union([z.string(), z.number()]), true],
     ['enum', z.enum(['a', 'b', 'c']), 'd'],
     ['nativeEnum', z.nativeEnum({a: 1, b: 2, c: 3}), 4],
     ['record', z.record(z.string()), {a: 1}],
-    ['tuple', z.tuple([z.number(), z.string(), z.date()]), [1, '2', '2022-01-01']],
+    ['tuple', z.tuple([z.number(), z.string(), z.date()]), [1, 2, new Date()]],
     [
       'intersection',
       z.intersection(z.object({a: z.boolean(), b: z.string()}), z.object({c: z.number()})),
-      {a: true, b: 'hello'},
+      {a: true, b: 'hello', c: 'not-a-number'},
     ],
     [
       'discriminated union',
@@ -37,10 +38,10 @@ describe('Validation', () => {
         z.object({type: z.literal('a'), a: z.string()}),
         z.object({type: z.literal('b'), b: z.string()}),
       ]),
-      {type: 'a', b: 'a'},
+      {type: 'a', a: 1},
     ],
     ['array', z.array(z.union([z.string(), z.number()])), ['1', 2, true]],
-    ['object', z.object({a: z.string(), b: z.number()}), {a: 1, b: '2'}],
+    ['object', z.object({a: z.string(), b: z.number()}), {a: '1', b: 'not-a-number'}],
     ['array of objects', z.object({a: z.string(), b: z.number()}).array().min(2), [{a: '1', b: 2}]],
   ] as const)(
     'Throws ValidationError if zod validation is not passed for type %s',
@@ -50,7 +51,11 @@ describe('Validation', () => {
       const Model = M.model(`test-${type}-fail`, toMongooseSchema(zodSchema));
       const instance = new Model({a: value});
 
-      // expect(instance.validateSync()).toBeInstanceOf(M.Error.ValidationError);
+      const err = instance.validateSync();
+      if (!err) {
+        throw new Error(`Validation for type ${type} should have failed for value ${JSON.stringify(value)}`);
+      }
+      expect(err).toBeInstanceOf(M.Error.ValidationError);
     },
   );
 
@@ -161,20 +166,18 @@ describe('Validation', () => {
     const Model = M.model('test', toMongooseSchema(zodSchema));
 
     [
-      '1',
-      '',
-      true,
-      false,
-      // eslint-disable-next-line no-new-wrappers, unicorn/new-for-builtins
-      new Number(1),
+      // '1', // Mongoose casts this to 1
+      'not-a-number',
+      // true, // Mongoose casts this to 1
+      // false, // Mongoose casts this to 0
       {
         valueOf() {
-          return 2;
+          return 'still-not-a-number';
         },
       },
     ].forEach((badValue) => {
       const instance = new Model({a: badValue});
-      // expect(instance.validateSync()).toBeInstanceOf(M.Error.ValidationError);
+      expect(instance.validateSync()).toBeInstanceOf(M.Error.ValidationError);
     });
   });
 

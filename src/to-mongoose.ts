@@ -23,7 +23,7 @@ const {Mixed: MongooseMixed} = M.Schema.Types;
 
 registerCustomMongooseZodTypes();
 
-// eslint-disable-next-line @typescript-eslint/ban-types
+// eslint-disable-next-line
 const getFixedOptionFn = (fn: Function) =>
   function (this: unknown, ...args: any[]) {
     const thisFixed = this && this instanceof M.Document ? this : undefined;

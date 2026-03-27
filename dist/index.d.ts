@@ -27,6 +27,7 @@ declare module 'zod' {
     interface ZodTypeDef {
         [MongooseTypeOptionsSymbol]?: SchemaTypeOptions<any>;
         [MongooseSchemaOptionsSymbol]?: SchemaOptions;
+        mongooseZodCustomType?: any;
     }
     interface ZodSchema {
         mongooseTypeOptions<T extends ZodSchema<any>>(this: T, options: SchemaTypeOptions<T['_output']>): T;
@@ -35,12 +36,8 @@ declare module 'zod' {
         mongoose: <ZO extends ZodObject<T, UnknownKeys, Catchall, Output, Input>, TInstanceMethods extends {} = {}, QueryHelpers extends {} = {}, TStaticMethods extends {} = {}, TVirtuals extends {} = {}>(this: ZO, metadata?: MongooseMetadata<ZO['_output'], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>) => ZodMongoose<ZO, ZO['_output'], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>;
     }
 }
-declare const toZodMongooseSchema: <ZO extends ZodObject<any, "strip", z.ZodTypeAny, {
-    [x: string]: any;
-}, {
-    [x: string]: any;
-}>, TInstanceMethods extends {} = {}, QueryHelpers extends {} = {}, TStaticMethods extends {} = {}, TVirtuals extends {} = {}>(zObject: ZO, metadata?: MongooseMetadata<ZO["_output"], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>) => ZodMongoose<ZO, ZO["_output"], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>;
-declare const addMongooseTypeOptions: <T extends z.ZodType<any, z.ZodTypeDef, any>>(zObject: T, options: SchemaTypeOptions<T["_output"], any>) => T;
+declare const toZodMongooseSchema: <ZO extends ZodObject<any>, TInstanceMethods extends {} = {}, QueryHelpers extends {} = {}, TStaticMethods extends {} = {}, TVirtuals extends {} = {}>(zObject: ZO, metadata?: MongooseMetadata<ZO["_output"], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>) => ZodMongoose<ZO, ZO["_output"], TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>;
+declare const addMongooseTypeOptions: <T extends z.ZodSchema<any>>(zObject: T, options: SchemaTypeOptions<T["_output"]>) => T;
 declare module 'mongoose' {
     interface MZValidateFn<T, ThisType> {
         (this: ThisType, value: T): boolean;
@@ -68,7 +65,7 @@ declare module 'mongoose' {
 }
 
 type StringLiteral<T> = T extends string ? (string extends T ? never : T) : never;
-declare const genTimestampsSchema: <CrAt = "createdAt", UpAt = "updatedAt">(createdAtField?: "createdAt" | StringLiteral<CrAt> | null, updatedAtField?: "updatedAt" | StringLiteral<UpAt> | null) => z.ZodObject<{ [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; }, "strip", z.ZodTypeAny, z.objectUtil.addQuestionMarks<{ [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; } extends infer T_2 extends z.ZodRawShape ? { [k_2 in keyof T_2]: { [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; }[k_2]["_output"]; } : never> extends infer T ? { [k_1 in keyof T]: z.objectUtil.addQuestionMarks<{ [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; } extends infer T_1 extends z.ZodRawShape ? { [k in keyof T_1]: { [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; }[k]["_output"]; } : never>[k_1]; } : never, z.objectUtil.addQuestionMarks<{ [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; } extends infer T_5 extends z.ZodRawShape ? { [k_2_1 in keyof T_5]: { [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; }[k_2_1]["_input"]; } : never> extends infer T_3 ? { [k_3 in keyof T_3]: z.objectUtil.addQuestionMarks<{ [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; } extends infer T_4 extends z.ZodRawShape ? { [k_2 in keyof T_4]: { [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; }[k_2]["_input"]; } : never>[k_3]; } : never>;
+declare const genTimestampsSchema: <CrAt = "createdAt", UpAt = "updatedAt">(createdAtField?: StringLiteral<CrAt | "createdAt"> | null, updatedAtField?: StringLiteral<UpAt | "updatedAt"> | null) => z.ZodObject<{ [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; }, "strip", z.ZodTypeAny, z.objectUtil.addQuestionMarks<z.baseObjectOutputType<{ [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; }>, any> extends infer T ? { [k in keyof T]: T[k]; } : never, z.baseObjectInputType<{ [_ in StringLiteral<CrAt & {}> | StringLiteral<UpAt & {}>]: z.ZodDefault<z.ZodDate>; }> extends infer T_1 ? { [k_1 in keyof T_1]: T_1[k_1]; } : never>;
 type MongooseSchemaTypeParameters<T, Parameter extends 'InstanceMethods' | 'QueryHelpers' | 'TStaticMethods' | 'TVirtuals'> = T extends ZodMongoose<any, any, infer InstanceMethods, infer QueryHelpers, infer TStaticMethods, infer TVirtuals> ? {
     InstanceMethods: InstanceMethods;
     QueryHelpers: QueryHelpers;
@@ -92,10 +89,17 @@ interface SetupOptions {
     defaultToMongooseSchemaOptions?: ToMongooseSchemaOptions;
 }
 
-declare const toMongooseSchema: <Schema extends ZodMongoose<any, any, {}, {}, {}, {}>>(rootZodSchema: Schema, options?: ToMongooseSchemaOptions) => M.Schema<z$1.TypeOf<Schema>, any, MongooseSchemaTypeParameters<Schema, "InstanceMethods">, MongooseSchemaTypeParameters<Schema, "QueryHelpers">, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">>, MongooseSchemaTypeParameters<Schema, "TStaticMethods">, M.DefaultSchemaOptions, M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.ResolveSchemaOptions<M.DefaultSchemaOptions>>, M.IfAny<M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.ResolveSchemaOptions<M.DefaultSchemaOptions>>>, any, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">> & MongooseSchemaTypeParameters<Schema, "InstanceMethods"> extends infer T ? T extends Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">> & MongooseSchemaTypeParameters<Schema, "InstanceMethods"> ? T extends Record<string, never> ? M.Document<unknown, {}, M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.ResolveSchemaOptions<M.DefaultSchemaOptions>>>> & M.Require_id<M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.ResolveSchemaOptions<M.DefaultSchemaOptions>>>> : M.IfAny<T, M.Document<unknown, {}, M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.ResolveSchemaOptions<M.DefaultSchemaOptions>>>> & M.Require_id<M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.ResolveSchemaOptions<M.DefaultSchemaOptions>>>>, M.Document<unknown, {}, M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.ResolveSchemaOptions<M.DefaultSchemaOptions>>>> & Omit<M.Require_id<M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.ResolveSchemaOptions<M.DefaultSchemaOptions>>>>, keyof T> & T> : never : never>>;
+declare const toMongooseSchema: <Schema extends ZodMongoose<any, any>>(rootZodSchema: Schema, options?: ToMongooseSchemaOptions) => M.Schema<z$1.TypeOf<Schema>, any, MongooseSchemaTypeParameters<Schema, "InstanceMethods">, MongooseSchemaTypeParameters<Schema, "QueryHelpers">, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">>, MongooseSchemaTypeParameters<Schema, "TStaticMethods">, M.DefaultSchemaOptions, M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>, M.IfAny<M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>>, any, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">> & MongooseSchemaTypeParameters<Schema, "InstanceMethods"> extends infer T ? T extends Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">> & MongooseSchemaTypeParameters<Schema, "InstanceMethods"> ? T extends Record<string, never> ? M.Document<unknown, {}, M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>>, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">>, M.DefaultSchemaOptions> & M.Require_id<M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>>> & {
+    __v: number;
+} : M.IfAny<T, M.Document<unknown, {}, M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>>, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">>, M.DefaultSchemaOptions> & M.Require_id<M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>>> & {
+    __v: number;
+}, M.Document<unknown, {}, M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>>, Partial<MongooseSchemaTypeParameters<Schema, "TVirtuals">>, M.DefaultSchemaOptions> & Omit<M.Require_id<M.FlatRecord<M.ObtainDocumentType<any, z$1.TypeOf<Schema>, M.DefaultSchemaOptions>>> & {
+    __v: number;
+}, keyof T> & T> : never : never>>;
 
-declare const mongooseZodCustomType: <T extends "ObjectId" | "Buffer" | "Decimal128" | "Map" | "Array" | "DocumentArray" | "Subdocument">(typeName: T, params?: Parameters<ZodTypeAny['refine']>[1]) => z.ZodType<InstanceType<T extends "Buffer" ? BufferConstructor : (typeof M.Types)[T]>, z.ZodTypeDef, InstanceType<T extends "Buffer" ? BufferConstructor : (typeof M.Types)[T]>>;
+declare const mongooseZodCustomType: <T extends keyof typeof M.Types & keyof typeof M.Schema.Types>(typeName: T, params?: Parameters<ZodTypeAny["refine"]>[1]) => z.ZodType<InstanceType<T extends "Buffer" ? BufferConstructor : (typeof M.Types)[T]>, z.ZodTypeDef, InstanceType<T extends "Buffer" ? BufferConstructor : (typeof M.Types)[T]>>;
 
 declare const setup: (options?: SetupOptions) => void;
 
-export { DisableablePlugins, MongooseSchemaOptionsSymbol, MongooseTypeOptionsSymbol, MongooseZodError, SetupOptions, ToMongooseSchemaOptions, UnknownKeysHandling, ZodMongoose, addMongooseTypeOptions, bufferMongooseGetter, genTimestampsSchema, mongooseZodCustomType, setup, toMongooseSchema, toZodMongooseSchema };
+export { MongooseSchemaOptionsSymbol, MongooseTypeOptionsSymbol, MongooseZodError, ZodMongoose, addMongooseTypeOptions, bufferMongooseGetter, genTimestampsSchema, mongooseZodCustomType, setup, toMongooseSchema, toZodMongooseSchema };
+export type { DisableablePlugins, SetupOptions, ToMongooseSchemaOptions, UnknownKeysHandling };

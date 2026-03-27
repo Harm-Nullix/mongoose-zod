@@ -1,4 +1,5 @@
 /* eslint-disable unicorn/no-this-assignment, @typescript-eslint/no-this-alias */
+import {describe, it, beforeAll, afterAll, expect, mock, beforeEach} from 'bun:test';
 import {MongoMemoryServer} from 'mongodb-memory-server';
 import M from 'mongoose';
 import {z} from 'zod';
@@ -25,7 +26,7 @@ describe('Type options provided by mongoose-zod', () => {
 
   describe('mzValidate', () => {
     it('Calls validators if a validation function passed to `mzValidate`', () => {
-      const validate = jest.fn();
+      const validate = mock();
       const zodSchema = z.object({username: z.string()}).mongoose({
         typeOptions: {
           username: {
@@ -41,7 +42,7 @@ describe('Type options provided by mongoose-zod', () => {
     });
 
     it('Calls validators if a validation function passed to `mzValidate` on a sub schema', () => {
-      const validate = jest.fn();
+      const validate = mock();
       const zodSchema = z
         .object({
           user: z.object({username: z.string()}).mongoose({
@@ -61,7 +62,7 @@ describe('Type options provided by mongoose-zod', () => {
     });
 
     it('Calls validators if an object with a validation function passed to `mzValidate`', () => {
-      const validate = jest.fn();
+      const validate = mock();
       const zodSchema = z.object({username: z.string()}).mongoose({
         typeOptions: {
           username: {
@@ -210,7 +211,7 @@ describe('Type options provided by mongoose-zod', () => {
 
   describe('mzRequired', () => {
     it('Calls a function passed to `mzRequired`', () => {
-      const required = jest.fn();
+      const required = mock();
       const zodSchema = z.object({username: z.string().optional()}).mongoose({
         typeOptions: {
           username: {

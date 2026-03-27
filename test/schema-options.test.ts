@@ -1,3 +1,4 @@
+import {describe, it, expect} from 'bun:test';
 import type {SchemaOptions} from 'mongoose';
 import {z} from 'zod';
 import {toMongooseSchema} from '../src/index.js';

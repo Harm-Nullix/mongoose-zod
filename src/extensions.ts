@@ -1,6 +1,6 @@
-import type {SchemaTypeOptions as MongooseSchemaTypeOptions, SchemaOptions} from 'mongoose';
-import {ZodObject, z} from 'zod';
-import type {PartialLaconic} from './types.js';
+import type { SchemaTypeOptions as MongooseSchemaTypeOptions, SchemaOptions } from 'mongoose';
+import { ZodObject, z } from 'zod';
+import type { PartialLaconic } from './types.js';
 
 export const MongooseTypeOptionsSymbol = Symbol.for('MongooseTypeOptions');
 export const MongooseSchemaOptionsSymbol = Symbol.for('MongooseSchemaOptions');
@@ -29,7 +29,8 @@ export interface ZodMongooseDef<
   QueryHelpers extends {} = {},
   TStaticMethods extends {} = {},
   TVirtuals extends {} = {},
-> extends z.ZodTypeDef {
+>
+  extends z.ZodTypeDef {
   innerType: ZodType;
   mongoose: MongooseMetadata<DocType, TInstanceMethods, QueryHelpers, TStaticMethods, TVirtuals>;
 }
@@ -125,7 +126,7 @@ export const toZodMongooseSchema = function <
   QueryHelpers extends {} = {},
   TStaticMethods extends {} = {},
   TVirtuals extends {} = {},
->(
+> (
   zObject: ZO,
   metadata: MongooseMetadata<
     ZO['_output'],
@@ -135,14 +136,13 @@ export const toZodMongooseSchema = function <
     TVirtuals
   > = {},
 ) {
-  return ZodMongoose.create({mongoose: metadata, innerType: zObject});
+  return ZodMongoose.create({ mongoose: metadata, innerType: zObject });
 };
 
 export const addMongooseToZodPrototype = (toZ: typeof z | null) => {
   if (toZ === null) {
     if (z.ZodObject.prototype.mongoose !== undefined) {
-      // @ts-expect-error `mongoose` might not exists despite what the types say
-      delete z.ZodObject.prototype.mongoose;
+      delete (z.ZodObject.prototype as any).mongoose;
     }
   } else if (toZ.ZodObject.prototype.mongoose === undefined) {
     toZ.ZodObject.prototype.mongoose = function (metadata = {}) {
@@ -151,7 +151,7 @@ export const addMongooseToZodPrototype = (toZ: typeof z | null) => {
   }
 };
 
-export const addMongooseTypeOptions = function <T extends z.ZodSchema<any>>(
+export const addMongooseTypeOptions = function <T extends z.ZodSchema<any>> (
   zObject: T,
   options: MongooseSchemaTypeOptions<T['_output']>,
 ) {
@@ -165,8 +165,7 @@ export const addMongooseTypeOptions = function <T extends z.ZodSchema<any>>(
 export const addMongooseTypeOptionsToZodPrototype = (toZ: typeof z | null) => {
   if (toZ === null) {
     if (z.ZodType.prototype.mongooseTypeOptions !== undefined) {
-      // @ts-expect-error `mongoose` might not exists despite what the types say
-      delete z.ZodType.prototype.mongooseTypeOptions;
+      delete (z.ZodType.prototype as any).mongooseTypeOptions;
     }
   } else if (toZ.ZodType.prototype.mongooseTypeOptions === undefined) {
     toZ.ZodType.prototype.mongooseTypeOptions = function (
@@ -223,4 +222,4 @@ declare module 'mongoose' {
   };
 }
 
-export {z} from 'zod';
+export { z } from 'zod';

@@ -1,3 +1,4 @@
+import {describe, it, expect} from 'bun:test';
 import M from 'mongoose';
 import {z} from 'zod';
 import {MongooseZodError, mongooseZodCustomType, toMongooseSchema} from '../src/index.js';

@@ -1,3 +1,4 @@
+import {describe, it, expect, beforeEach} from 'bun:test';
 import M from 'mongoose';
 import {z} from 'zod';
 import {toMongooseSchema} from '../src/index.js';
@@ -37,9 +38,9 @@ describe('Schema virtuals', () => {
     const Model = M.model('test', toMongooseSchema(zodSchema));
     const instance = new Model({firstName: 'A', lastName: 'B'});
 
-    expect(instance.fullName).toEqual(`A B`);
+    expect((instance as any).fullName).toEqual(`A B`);
 
-    instance.fullName = 'C D';
+    (instance as any).fullName = 'C D';
 
     expect(instance.firstName).toEqual('C');
     expect(instance.lastName).toEqual('D');
@@ -51,9 +52,9 @@ describe('Schema virtuals', () => {
     const Model = M.model('test', toMongooseSchema(zodSchema));
     const instance = new Model({name: {firstName: 'A', lastName: 'B'}});
 
-    expect(instance.name.fullName).toEqual(`A B`);
+    expect((instance.name as any).fullName).toEqual(`A B`);
 
-    instance.name.fullName = 'C D';
+    (instance.name as any).fullName = 'C D';
 
     expect(instance.name.firstName).toEqual('C');
     expect(instance.name.lastName).toEqual('D');

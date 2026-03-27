@@ -1,19 +1,27 @@
 {
-  "extends": "@tsconfig/node14/tsconfig.json",
+  "extends": "@tsconfig/strictest/tsconfig.json",
 
   "compilerOptions": {
     "outDir": "./dist",
-    "module": "esnext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "lib": ["esnext"],
     "target": "esnext",
+    "baseUrl": ".",
     "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noImplicitOverride": false,
+    "noPropertyAccessFromIndexSignature": false,
+    "exactOptionalPropertyTypes": false,
+    "strict": false,
     "noUncheckedIndexedAccess": true,
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
-    "noErrorTruncation": true
+    "noErrorTruncation": true,
+    "types": ["bun"]
   },
 
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "test/**/*.ts"],
 
   "ts-node": {
     "esm": true

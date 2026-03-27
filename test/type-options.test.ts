@@ -1,3 +1,4 @@
+import {describe, it, expect, mock} from 'bun:test';
 import {z} from 'zod';
 import {
   MongooseZodError,
@@ -398,7 +399,7 @@ describe('Type options', () => {
   it('Throws if field is not .optional() nor .nullish() but required is set to function', () => {
     const zodSchema = z
       .object({
-        username: z.string().mongooseTypeOptions({required: jest.fn()}),
+        username: z.string().mongooseTypeOptions({required: mock()}),
       })
       .mongoose();
 

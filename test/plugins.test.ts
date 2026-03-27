@@ -1,3 +1,4 @@
+import {describe, it, beforeAll, afterAll, beforeEach, spyOn, expect} from 'bun:test';
 import {MongoMemoryServer} from 'mongodb-memory-server';
 import M from 'mongoose';
 import {z} from 'zod';
@@ -34,7 +35,7 @@ describe('Plugins', () => {
     });
 
     it('Does not add `mongoose-lean-virtuals` plugin if not installed', () => {
-      const spy = jest.spyOn(utils, 'tryImportModule').mockReturnValue(null);
+      const spy = spyOn(utils, 'tryImportModule').mockReturnValue(null as any);
 
       const Schema = toMongooseSchema(z.object({}).mongoose());
 
@@ -84,8 +85,8 @@ describe('Plugins', () => {
       await new UserWithVirtual({username: TEST_USERNAME}).save();
       const user = await UserWithVirtual.findOne({username: TEST_USERNAME}).lean();
 
-      expect(user?.username).toBe(TEST_USERNAME);
-      expect(user?.u).toEqual(user?.username);
+      expect((user as any)?.username).toBe(TEST_USERNAME);
+      expect((user as any)?.u).toEqual((user as any)?.username);
     });
 
     it('Allows to override "virtuals: true" when using .lean()', async () => {
@@ -93,7 +94,7 @@ describe('Plugins', () => {
       const user = await UserWithVirtual.findOne({username: TEST_USERNAME}).lean({virtuals: false});
 
       expect(user?.username).toBe(TEST_USERNAME);
-      expect(user?.u).toEqual(undefined);
+      expect((user as any)?.u).toEqual(undefined);
     });
   });
 
@@ -105,7 +106,7 @@ describe('Plugins', () => {
     });
 
     it('Does not add `mongoose-lean-defaults` plugin if not installed', () => {
-      const spy = jest.spyOn(utils, 'tryImportModule').mockReturnValue(null);
+      const spy = spyOn(utils, 'tryImportModule').mockReturnValue(null as any);
 
       const Schema = toMongooseSchema(z.object({}).mongoose());
 
@@ -185,7 +186,7 @@ describe('Plugins', () => {
     });
 
     it('Does not add `mongoose-lean-getters` plugin if not installed', () => {
-      const spy = jest.spyOn(utils, 'tryImportModule').mockReturnValue(null);
+      const spy = spyOn(utils, 'tryImportModule').mockReturnValue(null as any);
 
       const Schema = toMongooseSchema(z.object({}).mongoose());
 

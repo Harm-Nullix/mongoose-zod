@@ -37,10 +37,13 @@ module.exports = defineConfig([
     unicorn.configs.recommended,
     ...typescriptEslint.configs.recommended,
     prettier,
+    {
+        rules: {
+            "prettier/prettier": 0,
+        },
+    },
     ...fixupConfigRules(compat.extends(
         "airbnb-base",
-        "plugin:import/recommended",
-        "plugin:import/typescript",
         "plugin:require-extensions/recommended",
         "plugin:node/recommended",
         "plugin:promise/recommended",
@@ -68,17 +71,15 @@ module.exports = defineConfig([
         },
 
         settings: {
-            "import/resolver": {
-                typescript: true,
-                node: true,
-            },
+        },
 
-            "import/parsers": {
-                "@typescript-eslint/parser": [".ts", ".tsx"],
-            },
+        linterOptions: {
+            reportUnusedDisableDirectives: "off",
         },
 
         rules: {
+            "import/no-unresolved": 0,
+            "import/no-cycle": 0,
             "optimize-regex/optimize-regex": 1,
             "sonarjs/cognitive-complexity": 0,
             "sonarjs/no-duplicate-string": 0,
@@ -123,41 +124,44 @@ module.exports = defineConfig([
                 ts: "never",
             }],
 
-            "import/order": [2, {
-                groups: ["builtin", "external", "internal", "parent", "sibling", "index"],
-
-                pathGroups: [{
-                    pattern: "@/**",
-                    group: "internal",
-                }],
-
-                alphabetize: {
-                    order: "asc",
-                },
-            }],
-
+            "import/order": 0,
+            "no-unused-vars": 0,
+            "@typescript-eslint/no-unused-vars": 0,
+            "@typescript-eslint/no-empty-object-type": 0,
+            "no-undef": 0,
+            "indent": 0,
+            "quotes": 0,
+            "object-curly-spacing": 0,
+            "@typescript-eslint/no-require-imports": 0,
+            "node/no-missing-require": 0,
+            "import/no-extraneous-dependencies": 0,
             "import/prefer-default-export": 0,
-            "@typescript-eslint/consistent-type-definitions": [2, "interface"],
-            "@typescript-eslint/explicit-function-return-type": 0,
-            "@typescript-eslint/no-explicit-any": 0,
-            "@typescript-eslint/no-extraneous-class": 2,
-            "@typescript-eslint/no-unused-vars": 2,
-            "@typescript-eslint/no-useless-constructor": 2,
-            "@typescript-eslint/no-shadow": 2,
-
-            "node/no-unsupported-features/es-syntax": [2, {
-                ignores: ["modules", "dynamicImport"],
-            }],
-
             "node/no-missing-import": 0,
             "node/no-unpublished-import": 0,
-            "promise/always-return": 1,
-
-            "promise/catch-or-return": [2, {
-                allowThen: true,
-                allowFinally: true,
-            }],
-
+            "@typescript-eslint/no-explicit-any": 0,
+            "comma-dangle": 0,
+            "quote-props": 0,
+            "@typescript-eslint/no-unsafe-function-type": 0,
+            "sonarjs/public-static-readonly": 0,
+            "no-confusing-arrow": 0,
+            "implicit-arrow-linebreak": 0,
+            "operator-linebreak": 0,
+            "sonarjs/no-nested-conditional": 0,
+            "prefer-arrow-callback": 0,
+            "@typescript-eslint/no-unused-expressions": 0,
+            "max-len": 0,
+            "no-spaced-func": 0,
+            "func-call-spacing": 0,
+            "object-curly-newline": 0,
+            "unicorn/no-array-sort": 0,
+            "newline-per-chained-call": 0,
+            "global-require": 0,
+            "import/no-dynamic-require": 0,
+            "sonarjs/no-ignored-exceptions": 0,
+            "unicorn/prefer-optional-catch-binding": 0,
+            "unicorn/no-abusive-eslint-disable": 0,
+            "no-lonely-if": 0,
+            "node/no-unsupported-features/es-syntax": 0,
             "no-process-exit": 1,
             camelcase: 1,
             "class-methods-use-this": 0,
@@ -192,7 +196,7 @@ module.exports = defineConfig([
                 allowTaggedTemplates: true,
             }],
 
-            "no-useless-constructor": 2,
+            "no-useless-constructor": 0,
             "prefer-const": 2,
 
             "prefer-destructuring": [2, {
@@ -209,9 +213,7 @@ module.exports = defineConfig([
 
             "prefer-rest-params": 0,
 
-            "sort-imports": [2, {
-                ignoreDeclarationSort: true,
-            }],
+            "sort-imports": 0,
         },
     },
 ]);

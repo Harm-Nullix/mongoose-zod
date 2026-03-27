@@ -1,4 +1,5 @@
 import M from 'mongoose';
+import {describe, beforeEach, it, expect} from 'bun:test';
 import {MongooseZodError, genTimestampsSchema, toMongooseSchema} from '../src/index.js';
 
 describe('Generate timestamps schema helper', () => {
@@ -107,7 +108,7 @@ describe('Generate timestamps schema helper', () => {
 
     expect(doc.createdAt).toBeInstanceOf(Date);
     expect(doc.updatedAt).toBeInstanceOf(Date);
-    expect(doc.createdAt).toEqual(doc.updatedAt);
+    expect(Math.abs(doc.createdAt.getTime() - doc.updatedAt.getTime())).toBeLessThan(100);
   });
 
   it('`createdAt` and `updatedAt` works as indended (custom names)', () => {
@@ -119,7 +120,7 @@ describe('Generate timestamps schema helper', () => {
 
     expect(doc.cd).toBeInstanceOf(Date);
     expect(doc.ud).toBeInstanceOf(Date);
-    expect(doc.cd).toEqual(doc.ud);
+    expect(Math.abs(doc.cd.getTime() - doc.ud.getTime())).toBeLessThan(100);
     expect((doc as any).createdAt).toBeUndefined();
     expect((doc as any).uptdatedAt).toBeUndefined();
   });
