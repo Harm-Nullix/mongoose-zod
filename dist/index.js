@@ -2,13 +2,11 @@ import { z } from 'zod/v4';
 import mongoose from 'mongoose';
 
 /**
- * 2. CREATE THE ZOD v4 REGISTRY
  * This securely stores our Mongoose metadata alongside the Zod schema instances
  * without polluting the actual validation logic.
  */
 const mongooseRegistry = z.registry();
 /**
- * 3. HELPER FUNCTION
  * A clean wrapper to attach Mongoose metadata to any Zod schema.
  */
 function withMongoose(schema, meta) {
@@ -224,6 +222,11 @@ function extractMongooseDef(schema, visited = new Map()) {
             const innerType = innerDef.type || innerDef;
             // Special case: If innerType is Mixed because of z.any(), we should represent it clearly
             mongooseProp.type = [innerType];
+            // Transfer any metadata from the inner type (like 'ref') to the array definition
+            if (typeof innerDef === 'object') {
+                Object.assign(mongooseProp, innerDef);
+                mongooseProp.type = [innerType]; // Restore type as array
+            }
         }
     }
     // Handle Records and Maps
@@ -357,11 +360,17 @@ function toMongooseSchema(schema, options) {
     const mergedOptions = {
         // Also merge other schema options from meta if they exist
         ...(meta.collection ? { collection: meta.collection } : {}),
+        // eslint-disable-next-line unicorn/no-negated-condition
         ...(meta.strict !== undefined ? { strict: meta.strict } : {}),
+        // eslint-disable-next-line unicorn/no-negated-condition
         ...(meta.id !== undefined ? { id: meta.id } : {}),
+        // eslint-disable-next-line unicorn/no-negated-condition
         ...(meta._id !== undefined ? { _id: meta._id } : {}),
+        // eslint-disable-next-line unicorn/no-negated-condition
         ...(meta.minimize !== undefined ? { minimize: meta.minimize } : {}),
+        // eslint-disable-next-line unicorn/no-negated-condition
         ...(meta.validateBeforeSave !== undefined ? { validateBeforeSave: meta.validateBeforeSave } : {}),
+        // eslint-disable-next-line unicorn/no-negated-condition
         ...(meta.versionKey !== undefined ? { versionKey: meta.versionKey } : {}),
         ...(meta.timestamps ? { timestamps: meta.timestamps } : {}),
         ...(meta.discriminatorKey ? { discriminatorKey: meta.discriminatorKey } : {}),
@@ -371,14 +380,26 @@ function toMongooseSchema(schema, options) {
     return new mongoose.Schema(definition, mergedOptions);
 }
 
-const zObjectId = (options) => withMongoose(z.custom(), {
+const zObjectId = (options) => withMongoose(z.custom((val) => val instanceof mongoose.Types.ObjectId ||
+    (typeof val === 'string' && mongoose.Types.ObjectId.isValid(val))), {
     type: mongoose.Schema.Types.ObjectId,
     ...options,
 });
-const zBuffer = (options) => withMongoose(z.custom(), {
+const zBuffer = (options) => withMongoose(z.custom((val) => val instanceof Buffer || val instanceof Uint8Array), {
     type: mongoose.Schema.Types.Buffer,
     ...options,
 });
+const zPopulated = (ref, schema, options) => {
+    return withMongoose(z.union([
+        z.custom((val) => val instanceof mongoose.Types.ObjectId ||
+            (typeof val === 'string' && mongoose.Types.ObjectId.isValid(val))),
+        schema,
+    ]), {
+        type: mongoose.Schema.Types.ObjectId,
+        ref,
+        ...options,
+    });
+};
 const DateFieldZod = () => z.date().default(() => new Date());
 const genTimestampsSchema = (createdAtField = 'createdAt', updatedAtField = 'updatedAt') => {
     if (createdAtField != null &&
@@ -407,5 +428,5 @@ const genTimestampsSchema = (createdAtField = 'createdAt', updatedAtField = 'upd
 };
 const bufferMongooseGetter = (value) => value != null && value._bsontype === 'Binary' ? value.buffer : value;
 
-export { bufferMongooseGetter, extractMongooseDef, genTimestampsSchema, mongooseRegistry, toMongooseSchema, withMongoose, zBuffer, zObjectId };
+export { bufferMongooseGetter, extractMongooseDef, genTimestampsSchema, mongooseRegistry, toMongooseSchema, withMongoose, zBuffer, zObjectId, zPopulated };
 //# sourceMappingURL=index.js.map

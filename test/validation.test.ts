@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'bun:test';
-import { z } from 'zod/v4';
-import { extractMongooseDef } from '../src/converter.js';
+import {describe, it, expect} from 'bun:test';
+import {z} from 'zod/v4';
+import {extractMongooseDef} from '../src/converter.js';
 
 describe('Zod Validation Mapping to Mongoose Options', () => {
   it('should map string validations (min, max, length, regex)', () => {
@@ -81,7 +81,7 @@ describe('Zod Validation Mapping to Mongoose Options', () => {
     expect(def.optStr.required).toBe(false);
 
     expect(def.nullNum.max).toBe(10);
-    
+
     expect(def.defDate.min).toEqual(new Date('2020-01-01'));
     expect(def.defDate.default).toBeDefined();
   });

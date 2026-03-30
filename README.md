@@ -62,6 +62,7 @@ The following table shows how Zod types are mapped to Mongoose types by default.
 | `z.intersection()` | `Merged Object` | Merges the definitions of both branches. |
 | `zObjectId()` | `mongoose.Schema.Types.ObjectId` | Specialized helper for ObjectIds. |
 | `zBuffer()` | `mongoose.Schema.Types.Buffer` | Specialized helper for Buffers. |
+| `zPopulated()` | `mongoose.Schema.Types.ObjectId` | Helper for fields that can be either an `ObjectId` or a populated object. |
 | `z.instanceof(Buffer)` | `mongoose.Schema.Types.Buffer` | |
 | `z.instanceof(ObjectId)` | `mongoose.Schema.Types.ObjectId` | |
 | `z.any()` / `z.unknown()` | `mongoose.Schema.Types.Mixed` | Fallback for unhandled types. |
@@ -218,6 +219,19 @@ Attaches Mongoose-specific metadata to any Zod schema.
 ### `zObjectId(options?)`
 Helper to create a Zod schema representing a Mongoose `ObjectId`.
 - `options`: Optional `MongooseMeta` for this field.
+
+### `zPopulated(ref, schema, options?)`
+Helper for fields that can be either an `ObjectId` (unpopulated) or a populated object.
+- `ref`: The name of the Mongoose model being referenced.
+- `schema`: The Zod schema representing the populated object.
+- `options`: Optional `MongooseMeta` for this field.
+
+```typescript
+const UserSchema = z.object({ name: z.string() });
+const PostSchema = z.object({
+  author: zPopulated('User', UserSchema),
+});
+```
 
 ### `zBuffer(options?)`
 Helper to create a Zod schema representing a Mongoose `Buffer`.

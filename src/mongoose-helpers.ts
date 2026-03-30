@@ -5,16 +5,47 @@ import {withMongoose, MongooseMeta} from './registry.js';
 type StringLiteral<T> = T extends string ? (string extends T ? never : T) : never;
 
 export const zObjectId = (options?: MongooseMeta) =>
-  withMongoose(z.custom<mongoose.Types.ObjectId>(), {
-    type: mongoose.Schema.Types.ObjectId,
-    ...options,
-  });
+  withMongoose(
+    z.custom<mongoose.Types.ObjectId>(
+      (val) =>
+        val instanceof mongoose.Types.ObjectId ||
+        (typeof val === 'string' && mongoose.Types.ObjectId.isValid(val)),
+    ),
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ...options,
+    },
+  );
 
 export const zBuffer = (options?: MongooseMeta) =>
-  withMongoose(z.custom<Buffer>(), {
-    type: mongoose.Schema.Types.Buffer,
-    ...options,
-  });
+  withMongoose(
+    z.custom<Buffer>((val) => val instanceof Buffer || val instanceof Uint8Array),
+    {
+      type: mongoose.Schema.Types.Buffer,
+      ...options,
+    },
+  );
+
+export const zPopulated = <T extends z.ZodTypeAny>(
+  ref: string,
+  schema: T,
+  options?: MongooseMeta,
+) =>
+  withMongoose(
+    z.union([
+      z.custom<mongoose.Types.ObjectId>(
+        (val) =>
+          val instanceof mongoose.Types.ObjectId ||
+          (typeof val === 'string' && mongoose.Types.ObjectId.isValid(val)),
+      ),
+      schema,
+    ]),
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref,
+      ...options,
+    },
+  );
 
 const DateFieldZod = () => z.date().default(() => new Date());
 

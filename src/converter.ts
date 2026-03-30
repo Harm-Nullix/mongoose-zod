@@ -161,6 +161,12 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
       const innerType = (innerDef as any).type || innerDef;
       // Special case: If innerType is Mixed because of z.any(), we should represent it clearly
       mongooseProp.type = [innerType];
+
+      // Transfer any metadata from the inner type (like 'ref') to the array definition
+      if (typeof innerDef === 'object') {
+        Object.assign(mongooseProp, innerDef);
+        mongooseProp.type = [innerType]; // Restore type as array
+      }
     }
   }
 

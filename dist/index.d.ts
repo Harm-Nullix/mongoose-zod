@@ -14,13 +14,11 @@ interface MongooseMeta extends SchemaTypeOptions<any>, SchemaOptions {
     [key: string]: any;
 }
 /**
- * 2. CREATE THE ZOD v4 REGISTRY
  * This securely stores our Mongoose metadata alongside the Zod schema instances
  * without polluting the actual validation logic.
  */
 declare const mongooseRegistry: z.core.$ZodRegistry<MongooseMeta, z.core.$ZodType<unknown, unknown, z.core.$ZodTypeInternals<unknown, unknown>>>;
 /**
- * 3. HELPER FUNCTION
  * A clean wrapper to attach Mongoose metadata to any Zod schema.
  */
 declare function withMongoose<T extends z.ZodTypeAny>(schema: T, meta: MongooseMeta): T;
@@ -46,10 +44,11 @@ declare function toMongooseSchema<T extends z.ZodTypeAny>(schema: T, options?: S
 type StringLiteral<T> = T extends string ? (string extends T ? never : T) : never;
 declare const zObjectId: (options?: MongooseMeta) => z.ZodCustom<mongoose.Types.ObjectId, mongoose.Types.ObjectId>;
 declare const zBuffer: (options?: MongooseMeta) => z.ZodCustom<Buffer<ArrayBufferLike>, Buffer<ArrayBufferLike>>;
+declare const zPopulated: <T extends z.ZodTypeAny>(ref: string, schema: T, options?: MongooseMeta) => z.ZodUnion<readonly [z.ZodCustom<mongoose.Types.ObjectId, mongoose.Types.ObjectId>, T]>;
 declare const genTimestampsSchema: <CrAt = "createdAt", UpAt = "updatedAt">(createdAtField?: StringLiteral<CrAt | "createdAt"> | null, updatedAtField?: StringLiteral<UpAt | "updatedAt"> | null) => z.ZodObject<{
     [x: string]: any;
 }, z.core.$strip>;
 declare const bufferMongooseGetter: (value: unknown) => any;
 
-export { bufferMongooseGetter, extractMongooseDef, genTimestampsSchema, mongooseRegistry, toMongooseSchema, withMongoose, zBuffer, zObjectId };
+export { bufferMongooseGetter, extractMongooseDef, genTimestampsSchema, mongooseRegistry, toMongooseSchema, withMongoose, zBuffer, zObjectId, zPopulated };
 export type { MongooseMeta, ToMongooseType };
