@@ -1,5 +1,5 @@
 import {z} from 'zod/v4';
-import {zObjectId} from '../src/index.js';
+import {withMongoose, zObjectId} from '../src/index.js';
 
 export const shared = z.object({
   _id: zObjectId(),
@@ -7,6 +7,6 @@ export const shared = z.object({
   n: z.number().min(2),
   createdAt: z.date(),
   updatedAt: z.date(),
-  mixed: z.json(),
+  mixed: withMongoose(z.json().optional(), {required: true}),
   deletedAt: z.date().nullable(),
 });

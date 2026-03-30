@@ -1,5 +1,5 @@
 import {z} from 'zod/v4';
-import {SchemaOptions, SchemaTypeOptions} from 'mongoose';
+import type {SchemaOptions, SchemaTypeOptions} from 'mongoose';
 /**
  * DEFINE THE METADATA SHAPE
  * This interface represents all the Mongoose-specific options you want to

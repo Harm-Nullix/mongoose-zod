@@ -36,6 +36,8 @@ Key features:
 - **Transformation Pipelines**: Automatically unwraps `.transform()`, `.pipe()`, `.preprocess()`, and `.refine()` to find the underlying Mongoose type.
 - **Native BigInt**: Maps Zod `bigint` to native Mongoose `BigInt`.
 - **Specialized Types**: Direct support for `Buffer` and `ObjectId` via `zObjectId()` and `zBuffer()` helpers (or `z.instanceof()`).
+- **Isomorphic Support**: Use `setFrontendMode(true)` to allow schemas to be used in frontend environments where Mongoose is not available. Specialized types will automatically fall back to strings/Uint8Arrays while preserving Mongoose metadata for the backend.
+- **Frontend Safe**: The package treats `mongoose` as an optional peer dependency. Core Zod schema definition and metadata helpers (`withMongoose`, `zObjectId`, etc.) are safe to use in the browser without installing `mongoose`.
 
 ### Type Conversion Table
 
@@ -93,7 +95,9 @@ npm i mongoose-zod
 
 ### Peer Dependencies
 
-This package requires `mongoose` (^8.x) and `zod` (^4.x). Note that `zod` imports should be from `zod/v4` to ensure compatibility.
+This package requires `zod` (^4.x). Note that `zod` imports should be from `zod/v4` to ensure compatibility.
+
+`mongoose` (^8.x) is an **optional peer dependency**. It is only required on the **backend** when calling `toMongooseSchema()`. You do **not** need to install `mongoose` on the frontend.
 
 ## Usage
 
@@ -236,6 +240,12 @@ const PostSchema = z.object({
 ### `zBuffer(options?)`
 Helper to create a Zod schema representing a Mongoose `Buffer`.
 - `options`: Optional `MongooseMeta` for this field.
+
+### `setFrontendMode(enabled)`
+Enable or disable frontend mode.
+- `enabled`: `boolean`.
+- In frontend mode, `zObjectId` falls back to a regex-validated string, and `zBuffer` falls back to `Uint8Array`.
+- This allows schemas to be shared between frontend and backend without requiring Mongoose on the client.
 
 ### `genTimestampsSchema(createdAtField?, updatedAtField?)`
 Returns a Zod object with timestamp fields.

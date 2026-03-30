@@ -1,7 +1,18 @@
 import {z} from 'zod/v4';
-import mongoose, {SchemaDefinition, SchemaDefinitionProperty, SchemaOptions} from 'mongoose';
+import type mongoose from 'mongoose';
+import type {SchemaDefinition, SchemaDefinitionProperty, SchemaOptions} from 'mongoose';
 import {mongooseRegistry} from './registry.js';
 import {unwrapZodSchema} from './zod-helpers.js';
+
+// Helper to get mongoose types safely without top-level import
+const getMongoose = () => {
+  try {
+    // eslint-disable-next-line global-require
+    return require('mongoose');
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Type-level mapping from Zod to Mongoose Schema Definitions
@@ -139,7 +150,29 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
     // If the developer didn't provide a strict Mongoose type override, return the shape
     if (!mongooseProp.type) {
       Object.assign(mongooseProp, objDef);
-      return objDef as any;
+      // If we have any Mongoose-specific metadata besides the shape itself, return mongooseProp.
+      // Otherwise return just the shape (objDef).
+      // We exclude top-level only options from triggering the "metadata" flag for nested paths,
+      // as they should be handled by toMongooseSchema.
+      // We also exclude 'required' if it's explicitly set to false by our unwrap logic for objects.
+      const topLevelOptions = new Set([
+        'collection',
+        'versionKey',
+        'timestamps',
+        'discriminatorKey',
+        'strict',
+        'id',
+        '_id',
+        'minimize',
+        'validateBeforeSave',
+      ]);
+      const hasFieldMetadata = Object.keys(mongooseProp).some((k) => {
+        if (Object.prototype.hasOwnProperty.call(objDef, k)) return false;
+        if (topLevelOptions.has(k)) return false;
+        if (k === 'required' && mongooseProp[k] === false) return false;
+        return true;
+      });
+      return (hasFieldMetadata ? mongooseProp : objDef) as any;
     }
 
     // If there is a type override, merge the object definition into the result
@@ -154,7 +187,8 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
       (unwrapped as any)._def.rest ||
       (unwrapped as any)._def.items?.[0];
 
-    const innerDef = element ? extractMongooseDef(element, visited) : mongoose.Schema.Types.Mixed;
+  const mongoose = getMongoose();
+  const innerDef = element ? extractMongooseDef(element, visited) : (mongoose?.Schema.Types.Mixed || 'Mixed');
 
     // If no explicit type override, wrap the inner definition in an array
     if (!mongooseProp.type) {
@@ -190,19 +224,19 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
     if (typeof left === 'object' && typeof right === 'object') {
       Object.assign(mongooseProp, left, right);
     } else if (!mongooseProp.type) {
-      mongooseProp.type = mongoose.Schema.Types.Mixed;
+      mongooseProp.type = getMongoose()?.Schema.Types.Mixed || 'Mixed';
     }
   }
 
   // Handle Unions
-  if (
+    if (
     (type === 'union' ||
       type === 'discriminatedunion' ||
       type === 'discriminated_union' ||
       type === 'literal') &&
     !mongooseProp.type
   ) {
-    mongooseProp.type = mongoose.Schema.Types.Mixed;
+    mongooseProp.type = getMongoose()?.Schema.Types.Mixed || 'Mixed';
   }
 
   // Handle Primitives
@@ -256,15 +290,16 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
   }
 
   // Handle Specialized Types (Buffer, ObjectId)
+  const mongooseInstance = getMongoose();
   if (type === 'any' || type === 'unknown' || type === 'custom') {
     const cls = def.cls || (unwrapped as any).cls;
-    if (cls === Buffer) {
-      if (!mongooseProp.type) mongooseProp.type = mongoose.Schema.Types.Buffer;
+    if (cls === Buffer || (typeof Uint8Array !== 'undefined' && cls === Uint8Array)) {
+      if (!mongooseProp.type) mongooseProp.type = mongooseInstance?.Schema.Types.Buffer || 'Buffer';
     } else if (
-      (cls?.name === 'ObjectId' || cls === mongoose.Types.ObjectId) &&
+      (cls?.name === 'ObjectId' || (mongooseInstance && cls === mongooseInstance.Types.ObjectId)) &&
       !mongooseProp.type
     ) {
-      mongooseProp.type = mongoose.Schema.Types.ObjectId;
+      mongooseProp.type = mongooseInstance?.Schema.Types.ObjectId || 'ObjectId';
     }
   }
 
@@ -287,7 +322,7 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
 
   // Fallback for z.any() or unhandled types
   if (!mongooseProp.type && type !== 'object') {
-    mongooseProp.type = mongoose.Schema.Types.Mixed;
+    mongooseProp.type = getMongoose()?.Schema.Types.Mixed || 'Mixed';
   }
 
   return mongooseProp as any;
@@ -324,6 +359,10 @@ export function toMongooseSchema<T extends z.ZodTypeAny>(
     ...(meta.discriminatorKey ? {discriminatorKey: meta.discriminatorKey} : {}),
     ...options,
   };
+  const mongoose = getMongoose();
+  if (!mongoose) {
+    throw new Error('Mongoose must be installed to use toMongooseSchema');
+  }
   const definition = extractMongooseDef(schema) as SchemaDefinition;
   return new mongoose.Schema(definition, mergedOptions) as any;
 }

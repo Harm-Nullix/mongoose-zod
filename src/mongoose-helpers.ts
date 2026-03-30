@@ -1,51 +1,85 @@
 import {z} from 'zod/v4';
-import mongoose from 'mongoose';
+import type mongoose from 'mongoose';
 import {withMongoose, MongooseMeta} from './registry.js';
+import {getFrontendMode} from './config.js';
+
+// Helper to get mongoose types safely without top-level import
+const getMongooseTypes = () => {
+  try {
+    // eslint-disable-next-line global-require
+    return require('mongoose');
+  } catch {
+    return null;
+  }
+};
 
 type StringLiteral<T> = T extends string ? (string extends T ? never : T) : never;
 
-export const zObjectId = (options?: MongooseMeta) =>
-  withMongoose(
+export const zObjectId = (options?: MongooseMeta) => {
+  if (getFrontendMode()) {
+    return withMongoose(z.string().regex(/^[\dA-Fa-f]{24}$/, 'Invalid ObjectId'), {
+      type: 'ObjectId', // String representation for metadata
+      ...options,
+    });
+  }
+
+  const mongoose = getMongooseTypes();
+
+  return withMongoose(
     z.custom<mongoose.Types.ObjectId>(
       (val) =>
-        val instanceof mongoose.Types.ObjectId ||
-        (typeof val === 'string' && mongoose.Types.ObjectId.isValid(val)),
+        (mongoose && val instanceof mongoose.Types.ObjectId) ||
+        (typeof val === 'string' && /^[\dA-Fa-f]{24}$/.test(val)),
     ),
     {
-      type: mongoose.Schema.Types.ObjectId,
+      type: mongoose?.Schema.Types.ObjectId || 'ObjectId',
       ...options,
     },
   );
+};
 
-export const zBuffer = (options?: MongooseMeta) =>
-  withMongoose(
-    z.custom<Buffer>((val) => val instanceof Buffer || val instanceof Uint8Array),
+export const zBuffer = (options?: MongooseMeta) => {
+  if (getFrontendMode()) {
+    return withMongoose(z.instanceof(Uint8Array), {
+      type: 'Buffer',
+      ...options,
+    });
+  }
+
+  const mongoose = getMongooseTypes();
+
+  return withMongoose(
+    z.custom<Buffer>((val) => (mongoose && val instanceof Buffer) || val instanceof Uint8Array),
     {
-      type: mongoose.Schema.Types.Buffer,
+      type: mongoose?.Schema.Types.Buffer || 'Buffer',
       ...options,
     },
   );
+};
 
 export const zPopulated = <T extends z.ZodTypeAny>(
   ref: string,
   schema: T,
   options?: MongooseMeta,
-) =>
-  withMongoose(
-    z.union([
-      z.custom<mongoose.Types.ObjectId>(
+) => {
+  const isFrontend = getFrontendMode();
+
+  const mongoose = getMongooseTypes();
+
+  const objectIdSchema = isFrontend
+    ? z.string().regex(/^[\dA-Fa-f]{24}$/, 'Invalid ObjectId')
+    : z.custom<mongoose.Types.ObjectId>(
         (val) =>
-          val instanceof mongoose.Types.ObjectId ||
-          (typeof val === 'string' && mongoose.Types.ObjectId.isValid(val)),
-      ),
-      schema,
-    ]),
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref,
-      ...options,
-    },
-  );
+          (mongoose && val instanceof mongoose.Types.ObjectId) ||
+          (typeof val === 'string' && /^[\dA-Fa-f]{24}$/.test(val)),
+      );
+
+  return withMongoose(z.union([objectIdSchema, schema]), {
+    type: isFrontend ? 'ObjectId' : mongoose?.Schema.Types.ObjectId || 'ObjectId',
+    ref,
+    ...options,
+  });
+};
 
 const DateFieldZod = () => z.date().default(() => new Date());
 

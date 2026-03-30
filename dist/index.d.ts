@@ -42,13 +42,21 @@ declare function extractMongooseDef<T extends z.ZodTypeAny>(schema: T, visited?:
 declare function toMongooseSchema<T extends z.ZodTypeAny>(schema: T, options?: SchemaOptions): mongoose.Schema<z.infer<T>>;
 
 type StringLiteral<T> = T extends string ? (string extends T ? never : T) : never;
-declare const zObjectId: (options?: MongooseMeta) => z.ZodCustom<mongoose.Types.ObjectId, mongoose.Types.ObjectId>;
-declare const zBuffer: (options?: MongooseMeta) => z.ZodCustom<Buffer<ArrayBufferLike>, Buffer<ArrayBufferLike>>;
-declare const zPopulated: <T extends z.ZodTypeAny>(ref: string, schema: T, options?: MongooseMeta) => z.ZodUnion<readonly [z.ZodCustom<mongoose.Types.ObjectId, mongoose.Types.ObjectId>, T]>;
+declare const zObjectId: (options?: MongooseMeta) => z.ZodString | z.ZodCustom<mongoose.Types.ObjectId, mongoose.Types.ObjectId>;
+declare const zBuffer: (options?: MongooseMeta) => z.ZodCustom<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> | z.ZodCustom<Buffer<ArrayBufferLike>, Buffer<ArrayBufferLike>>;
+declare const zPopulated: <T extends z.ZodTypeAny>(ref: string, schema: T, options?: MongooseMeta) => z.ZodUnion<readonly [z.ZodString | z.ZodCustom<mongoose.Types.ObjectId, mongoose.Types.ObjectId>, T]>;
 declare const genTimestampsSchema: <CrAt = "createdAt", UpAt = "updatedAt">(createdAtField?: StringLiteral<CrAt | "createdAt"> | null, updatedAtField?: StringLiteral<UpAt | "updatedAt"> | null) => z.ZodObject<{
     [x: string]: any;
 }, z.core.$strip>;
 declare const bufferMongooseGetter: (value: unknown) => any;
 
-export { bufferMongooseGetter, extractMongooseDef, genTimestampsSchema, mongooseRegistry, toMongooseSchema, withMongoose, zBuffer, zObjectId, zPopulated };
+/**
+ * Enable or disable frontend mode.
+ * In frontend mode, specialized types like ObjectId and Buffer fall back to
+ * simpler representations (strings/arrays) and do not depend on Mongoose.
+ */
+declare const setFrontendMode: (enabled: boolean) => void;
+declare const getFrontendMode: () => boolean;
+
+export { bufferMongooseGetter, extractMongooseDef, genTimestampsSchema, getFrontendMode, mongooseRegistry, setFrontendMode, toMongooseSchema, withMongoose, zBuffer, zObjectId, zPopulated };
 export type { MongooseMeta, ToMongooseType };

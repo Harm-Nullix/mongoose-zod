@@ -1,5 +1,4 @@
 import { z } from 'zod/v4';
-import mongoose from 'mongoose';
 
 /**
  * This securely stores our Mongoose metadata alongside the Zod schema instances
@@ -105,6 +104,16 @@ features = { required: true }, visited = new Set()) {
     return { schema, features };
 }
 
+// Helper to get mongoose types safely without top-level import
+const getMongoose = () => {
+    try {
+        // eslint-disable-next-line global-require
+        return require('mongoose');
+    }
+    catch {
+        return null;
+    }
+};
 /**
  * THE CONVERTER (Safe AST Walker)
  * We extract the Zod type and merge it with any registered Mongoose metadata.
@@ -205,7 +214,32 @@ function extractMongooseDef(schema, visited = new Map()) {
         // If the developer didn't provide a strict Mongoose type override, return the shape
         if (!mongooseProp.type) {
             Object.assign(mongooseProp, objDef);
-            return objDef;
+            // If we have any Mongoose-specific metadata besides the shape itself, return mongooseProp.
+            // Otherwise return just the shape (objDef).
+            // We exclude top-level only options from triggering the "metadata" flag for nested paths,
+            // as they should be handled by toMongooseSchema.
+            // We also exclude 'required' if it's explicitly set to false by our unwrap logic for objects.
+            const topLevelOptions = new Set([
+                'collection',
+                'versionKey',
+                'timestamps',
+                'discriminatorKey',
+                'strict',
+                'id',
+                '_id',
+                'minimize',
+                'validateBeforeSave',
+            ]);
+            const hasFieldMetadata = Object.keys(mongooseProp).some((k) => {
+                if (Object.prototype.hasOwnProperty.call(objDef, k))
+                    return false;
+                if (topLevelOptions.has(k))
+                    return false;
+                if (k === 'required' && mongooseProp[k] === false)
+                    return false;
+                return true;
+            });
+            return (hasFieldMetadata ? mongooseProp : objDef);
         }
         // If there is a type override, merge the object definition into the result
         Object.assign(mongooseProp, objDef);
@@ -216,7 +250,8 @@ function extractMongooseDef(schema, visited = new Map()) {
             unwrapped._def.valueType ||
             unwrapped._def.rest ||
             unwrapped._def.items?.[0];
-        const innerDef = element ? extractMongooseDef(element, visited) : mongoose.Schema.Types.Mixed;
+        const mongoose = getMongoose();
+        const innerDef = element ? extractMongooseDef(element, visited) : (mongoose?.Schema.Types.Mixed || 'Mixed');
         // If no explicit type override, wrap the inner definition in an array
         if (!mongooseProp.type) {
             const innerType = innerDef.type || innerDef;
@@ -248,7 +283,7 @@ function extractMongooseDef(schema, visited = new Map()) {
             Object.assign(mongooseProp, left, right);
         }
         else if (!mongooseProp.type) {
-            mongooseProp.type = mongoose.Schema.Types.Mixed;
+            mongooseProp.type = getMongoose()?.Schema.Types.Mixed || 'Mixed';
         }
     }
     // Handle Unions
@@ -257,7 +292,7 @@ function extractMongooseDef(schema, visited = new Map()) {
         type === 'discriminated_union' ||
         type === 'literal') &&
         !mongooseProp.type) {
-        mongooseProp.type = mongoose.Schema.Types.Mixed;
+        mongooseProp.type = getMongoose()?.Schema.Types.Mixed || 'Mixed';
     }
     // Handle Primitives
     switch (type) {
@@ -316,15 +351,16 @@ function extractMongooseDef(schema, visited = new Map()) {
             mongooseProp.required = true;
     }
     // Handle Specialized Types (Buffer, ObjectId)
+    const mongooseInstance = getMongoose();
     if (type === 'any' || type === 'unknown' || type === 'custom') {
         const cls = def.cls || unwrapped.cls;
-        if (cls === Buffer) {
+        if (cls === Buffer || (typeof Uint8Array !== 'undefined' && cls === Uint8Array)) {
             if (!mongooseProp.type)
-                mongooseProp.type = mongoose.Schema.Types.Buffer;
+                mongooseProp.type = mongooseInstance?.Schema.Types.Buffer || 'Buffer';
         }
-        else if ((cls?.name === 'ObjectId' || cls === mongoose.Types.ObjectId) &&
+        else if ((cls?.name === 'ObjectId' || (mongooseInstance && cls === mongooseInstance.Types.ObjectId)) &&
             !mongooseProp.type) {
-            mongooseProp.type = mongoose.Schema.Types.ObjectId;
+            mongooseProp.type = mongooseInstance?.Schema.Types.ObjectId || 'ObjectId';
         }
     }
     // Handle Lazy (Recursion Support)
@@ -346,7 +382,7 @@ function extractMongooseDef(schema, visited = new Map()) {
     }
     // Fallback for z.any() or unhandled types
     if (!mongooseProp.type && type !== 'object') {
-        mongooseProp.type = mongoose.Schema.Types.Mixed;
+        mongooseProp.type = getMongoose()?.Schema.Types.Mixed || 'Mixed';
     }
     return mongooseProp;
 }
@@ -376,26 +412,78 @@ function toMongooseSchema(schema, options) {
         ...(meta.discriminatorKey ? { discriminatorKey: meta.discriminatorKey } : {}),
         ...options,
     };
+    const mongoose = getMongoose();
+    if (!mongoose) {
+        throw new Error('Mongoose must be installed to use toMongooseSchema');
+    }
     const definition = extractMongooseDef(schema);
     return new mongoose.Schema(definition, mergedOptions);
 }
 
-const zObjectId = (options) => withMongoose(z.custom((val) => val instanceof mongoose.Types.ObjectId ||
-    (typeof val === 'string' && mongoose.Types.ObjectId.isValid(val))), {
-    type: mongoose.Schema.Types.ObjectId,
-    ...options,
-});
-const zBuffer = (options) => withMongoose(z.custom((val) => val instanceof Buffer || val instanceof Uint8Array), {
-    type: mongoose.Schema.Types.Buffer,
-    ...options,
-});
+let isFrontend = false;
+/**
+ * Enable or disable frontend mode.
+ * In frontend mode, specialized types like ObjectId and Buffer fall back to
+ * simpler representations (strings/arrays) and do not depend on Mongoose.
+ */
+const setFrontendMode = (enabled) => {
+    isFrontend = enabled;
+};
+const getFrontendMode = () => {
+    // Try to auto-detect if not explicitly set
+    // This is a simple heuristic: check for window/document
+    if (isFrontend === undefined || isFrontend === null) {
+        return globalThis.window !== undefined && globalThis.document !== undefined;
+    }
+    return isFrontend;
+};
+
+// Helper to get mongoose types safely without top-level import
+const getMongooseTypes = () => {
+    try {
+        // eslint-disable-next-line global-require
+        return require('mongoose');
+    }
+    catch {
+        return null;
+    }
+};
+const zObjectId = (options) => {
+    if (getFrontendMode()) {
+        return withMongoose(z.string().regex(/^[\dA-Fa-f]{24}$/, 'Invalid ObjectId'), {
+            type: 'ObjectId', // String representation for metadata
+            ...options,
+        });
+    }
+    const mongoose = getMongooseTypes();
+    return withMongoose(z.custom((val) => (mongoose && val instanceof mongoose.Types.ObjectId) ||
+        (typeof val === 'string' && /^[\dA-Fa-f]{24}$/.test(val))), {
+        type: mongoose?.Schema.Types.ObjectId || 'ObjectId',
+        ...options,
+    });
+};
+const zBuffer = (options) => {
+    if (getFrontendMode()) {
+        return withMongoose(z.instanceof(Uint8Array), {
+            type: 'Buffer',
+            ...options,
+        });
+    }
+    const mongoose = getMongooseTypes();
+    return withMongoose(z.custom((val) => (mongoose && val instanceof Buffer) || val instanceof Uint8Array), {
+        type: mongoose?.Schema.Types.Buffer || 'Buffer',
+        ...options,
+    });
+};
 const zPopulated = (ref, schema, options) => {
-    return withMongoose(z.union([
-        z.custom((val) => val instanceof mongoose.Types.ObjectId ||
-            (typeof val === 'string' && mongoose.Types.ObjectId.isValid(val))),
-        schema,
-    ]), {
-        type: mongoose.Schema.Types.ObjectId,
+    const isFrontend = getFrontendMode();
+    const mongoose = getMongooseTypes();
+    const objectIdSchema = isFrontend
+        ? z.string().regex(/^[\dA-Fa-f]{24}$/, 'Invalid ObjectId')
+        : z.custom((val) => (mongoose && val instanceof mongoose.Types.ObjectId) ||
+            (typeof val === 'string' && /^[\dA-Fa-f]{24}$/.test(val)));
+    return withMongoose(z.union([objectIdSchema, schema]), {
+        type: isFrontend ? 'ObjectId' : mongoose?.Schema.Types.ObjectId || 'ObjectId',
         ref,
         ...options,
     });
@@ -428,5 +516,5 @@ const genTimestampsSchema = (createdAtField = 'createdAt', updatedAtField = 'upd
 };
 const bufferMongooseGetter = (value) => value != null && value._bsontype === 'Binary' ? value.buffer : value;
 
-export { bufferMongooseGetter, extractMongooseDef, genTimestampsSchema, mongooseRegistry, toMongooseSchema, withMongoose, zBuffer, zObjectId, zPopulated };
+export { bufferMongooseGetter, extractMongooseDef, genTimestampsSchema, getFrontendMode, mongooseRegistry, setFrontendMode, toMongooseSchema, withMongoose, zBuffer, zObjectId, zPopulated };
 //# sourceMappingURL=index.js.map
