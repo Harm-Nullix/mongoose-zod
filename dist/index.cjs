@@ -96,8 +96,15 @@ features = { required: true }, visited = new Set()) {
         // NOTE: In Zod v4, getter() might return different objects each time if not careful.
         return { schema, features };
     }
-    if (type === 'branded') {
-        return unwrapZodSchema(schema.unwrap(), features, visited);
+    if (type === 'branded' || type === 'readonly') {
+        return unwrapZodSchema(schema.unwrap(), {
+            ...features,
+            ...(type === 'readonly' ? { readOnly: true } : {}),
+        }, visited);
+    }
+    // Extract checks if present
+    if (def.checks && Array.isArray(def.checks)) {
+        features.checks = [...(features.checks || []), ...def.checks];
     }
     return { schema, features };
 }
@@ -133,6 +140,53 @@ function extractMongooseDef(schema, visited = new Map()) {
     }
     if (features.required === false) {
         mongooseProp.required = false;
+    }
+    if (features.readOnly === true) {
+        mongooseProp.readOnly = true;
+    }
+    // Map Zod checks to Mongoose options
+    if (features.checks && Array.isArray(features.checks)) {
+        for (const check of features.checks) {
+            const traitSet = check._zod?.traits;
+            const checkDef = check._zod?.def;
+            if (!traitSet || !checkDef)
+                continue;
+            // String Lengths
+            if (traitSet.has('$ZodCheckMinLength')) {
+                mongooseProp.minlength = checkDef.minimum;
+            }
+            if (traitSet.has('$ZodCheckMaxLength')) {
+                mongooseProp.maxlength = checkDef.maximum;
+            }
+            if (traitSet.has('$ZodCheckLengthEquals')) {
+                mongooseProp.minlength = checkDef.length;
+                mongooseProp.maxlength = checkDef.length;
+            }
+            // Numbers and Dates Comparisons
+            if (traitSet.has('$ZodCheckGreaterThan')) {
+                mongooseProp.min = checkDef.value;
+            }
+            if (traitSet.has('$ZodCheckLessThan')) {
+                mongooseProp.max = checkDef.value;
+            }
+            // Regex / Match
+            if (traitSet.has('$ZodCheckRegex')) {
+                mongooseProp.match = checkDef.pattern;
+            }
+            // String Transforms (trim, lowercase, uppercase)
+            if (traitSet.has('$ZodCheckOverwrite') && typeof checkDef.tx === 'function') {
+                const txStr = checkDef.tx.toString();
+                if (txStr.includes('.trim()')) {
+                    mongooseProp.trim = true;
+                }
+                else if (txStr.includes('.toLowerCase()')) {
+                    mongooseProp.lowercase = true;
+                }
+                else if (txStr.includes('.toUpperCase()')) {
+                    mongooseProp.uppercase = true;
+                }
+            }
+        }
     }
     const def = unwrapped._def;
     if (!def)
@@ -303,9 +357,17 @@ function toMongooseSchema(schema, options) {
         unwrapped.meta?.() ||
         {};
     const mergedOptions = {
-        ...options,
+        // Also merge other schema options from meta if they exist
+        ...(meta.collection ? { collection: meta.collection } : {}),
+        ...(meta.strict !== undefined ? { strict: meta.strict } : {}),
+        ...(meta.id !== undefined ? { id: meta.id } : {}),
+        ...(meta._id !== undefined ? { _id: meta._id } : {}),
+        ...(meta.minimize !== undefined ? { minimize: meta.minimize } : {}),
+        ...(meta.validateBeforeSave !== undefined ? { validateBeforeSave: meta.validateBeforeSave } : {}),
+        ...(meta.versionKey !== undefined ? { versionKey: meta.versionKey } : {}),
         ...(meta.timestamps ? { timestamps: meta.timestamps } : {}),
         ...(meta.discriminatorKey ? { discriminatorKey: meta.discriminatorKey } : {}),
+        ...options,
     };
     const definition = extractMongooseDef(schema);
     return new mongoose.Schema(definition, mergedOptions);

@@ -1,17 +1,16 @@
 import { z } from 'zod/v4';
-import mongoose, { SchemaTypeOptions, SchemaDefinitionProperty } from 'mongoose';
+import mongoose, { SchemaTypeOptions, SchemaOptions, SchemaDefinitionProperty } from 'mongoose';
 
 /**
  * DEFINE THE METADATA SHAPE
  * This interface represents all the Mongoose-specific options you want to
  * support, including custom application flags.
+ * We extend both SchemaTypeOptions for field-level properties and SchemaOptions
+ * for top-level schema properties, allowing withMongoose to be used on any Zod schema.
  */
-interface MongooseMeta extends SchemaTypeOptions<any> {
-    timestamps?: boolean | {
-        createdAt?: string | boolean;
-        updatedAt?: string | boolean;
-    };
-    discriminatorKey?: string;
+interface MongooseMeta extends SchemaTypeOptions<any>, SchemaOptions {
+    hiddenFromPublic?: boolean;
+    readOnly?: boolean;
     [key: string]: any;
 }
 /**
@@ -41,8 +40,8 @@ type ToMongooseType<T extends z.ZodTypeAny> = T extends z.ZodObject<infer Shape>
  * THE CONVERTER (Safe AST Walker)
  * We extract the Zod type and merge it with any registered Mongoose metadata.
  */
-declare function extractMongooseDef<T extends z.ZodTypeAny>(schema: T, visited?: Map<z.ZodTypeAny, any>): ToMongooseType<T>;
-declare function toMongooseSchema<T extends z.ZodTypeAny>(schema: T, options?: mongoose.SchemaOptions): mongoose.Schema<z.infer<T>>;
+declare function extractMongooseDef<T extends z.ZodTypeAny>(schema: T, visited?: Map<z.ZodTypeAny, any>): ToMongooseType<T> & SchemaDefinitionProperty<any>;
+declare function toMongooseSchema<T extends z.ZodTypeAny>(schema: T, options?: SchemaOptions): mongoose.Schema<z.infer<T>>;
 
 type StringLiteral<T> = T extends string ? (string extends T ? never : T) : never;
 declare const zObjectId: (options?: MongooseMeta) => z.ZodCustom<mongoose.Types.ObjectId, mongoose.Types.ObjectId>;

@@ -1,5 +1,5 @@
 import {z} from 'zod/v4';
-import mongoose, {SchemaDefinitionProperty} from 'mongoose';
+import mongoose, {SchemaDefinition, SchemaDefinitionProperty, SchemaOptions} from 'mongoose';
 import {mongooseRegistry} from './registry.js';
 import {unwrapZodSchema} from './zod-helpers.js';
 
@@ -34,7 +34,7 @@ export type ToMongooseType<T extends z.ZodTypeAny> =
 export function extractMongooseDef<T extends z.ZodTypeAny>(
   schema: T,
   visited: Map<z.ZodTypeAny, any> = new Map(),
-): ToMongooseType<T> {
+): ToMongooseType<T> & SchemaDefinitionProperty<any> {
   const {schema: unwrapped, features} = unwrapZodSchema(schema);
 
   // Pull any explicitly registered Mongoose metadata for the ORIGINAL schema instance
@@ -66,6 +66,55 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
   }
   if (features.required === false) {
     mongooseProp.required = false;
+  }
+  if (features.readOnly === true) {
+    mongooseProp.readOnly = true;
+  }
+
+  // Map Zod checks to Mongoose options
+  if (features.checks && Array.isArray(features.checks)) {
+    for (const check of features.checks) {
+      const traitSet = check._zod?.traits;
+      const checkDef = check._zod?.def;
+      if (!traitSet || !checkDef) continue;
+
+      // String Lengths
+      if (traitSet.has('$ZodCheckMinLength')) {
+        mongooseProp.minlength = checkDef.minimum;
+      }
+      if (traitSet.has('$ZodCheckMaxLength')) {
+        mongooseProp.maxlength = checkDef.maximum;
+      }
+      if (traitSet.has('$ZodCheckLengthEquals')) {
+        mongooseProp.minlength = checkDef.length;
+        mongooseProp.maxlength = checkDef.length;
+      }
+
+      // Numbers and Dates Comparisons
+      if (traitSet.has('$ZodCheckGreaterThan')) {
+        mongooseProp.min = checkDef.value;
+      }
+      if (traitSet.has('$ZodCheckLessThan')) {
+        mongooseProp.max = checkDef.value;
+      }
+
+      // Regex / Match
+      if (traitSet.has('$ZodCheckRegex')) {
+        mongooseProp.match = checkDef.pattern;
+      }
+
+      // String Transforms (trim, lowercase, uppercase)
+      if (traitSet.has('$ZodCheckOverwrite') && typeof checkDef.tx === 'function') {
+        const txStr = checkDef.tx.toString();
+        if (txStr.includes('.trim()')) {
+          mongooseProp.trim = true;
+        } else if (txStr.includes('.toLowerCase()')) {
+          mongooseProp.lowercase = true;
+        } else if (txStr.includes('.toUpperCase()')) {
+          mongooseProp.uppercase = true;
+        }
+      }
+    }
   }
 
   const def = (unwrapped as any)._def;
@@ -240,7 +289,7 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
 
 export function toMongooseSchema<T extends z.ZodTypeAny>(
   schema: T,
-  options?: mongoose.SchemaOptions,
+  options?: SchemaOptions,
 ): mongoose.Schema<z.infer<T>> {
   const {schema: unwrapped} = unwrapZodSchema(schema);
   const meta =
@@ -250,11 +299,25 @@ export function toMongooseSchema<T extends z.ZodTypeAny>(
     (unwrapped as any).meta?.() ||
     {};
 
-  const mergedOptions = {
-    ...options,
+  const mergedOptions: SchemaOptions = {
+    // Also merge other schema options from meta if they exist
+    ...(meta.collection ? {collection: meta.collection} : {}),
+    // eslint-disable-next-line unicorn/no-negated-condition
+    ...(meta.strict !== undefined ? {strict: meta.strict} : {}),
+    // eslint-disable-next-line unicorn/no-negated-condition
+    ...(meta.id !== undefined ? {id: meta.id} : {}),
+    // eslint-disable-next-line unicorn/no-negated-condition
+    ...(meta._id !== undefined ? {_id: meta._id} : {}),
+    // eslint-disable-next-line unicorn/no-negated-condition
+    ...(meta.minimize !== undefined ? {minimize: meta.minimize} : {}),
+    // eslint-disable-next-line unicorn/no-negated-condition
+    ...(meta.validateBeforeSave !== undefined ? {validateBeforeSave: meta.validateBeforeSave} : {}),
+    // eslint-disable-next-line unicorn/no-negated-condition
+    ...(meta.versionKey !== undefined ? {versionKey: meta.versionKey} : {}),
     ...(meta.timestamps ? {timestamps: meta.timestamps} : {}),
     ...(meta.discriminatorKey ? {discriminatorKey: meta.discriminatorKey} : {}),
+    ...options,
   };
-  const definition = extractMongooseDef(schema);
-  return new mongoose.Schema<z.infer<T>>(definition as any, mergedOptions as any);
+  const definition = extractMongooseDef(schema) as SchemaDefinition;
+  return new mongoose.Schema(definition, mergedOptions) as any;
 }

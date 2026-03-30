@@ -11,6 +11,22 @@ Declaring mongoose schemas in TypeScript environment has always been tricky in t
 
 This library aims to solve many of the aforementioned problems utilizing `zod` as a schema authoring tool.
 
+### Automatic Validation & Transformation Mapping
+
+`mongoose-zod` automatically maps Zod's built-in validations and transformations to their corresponding Mongoose SchemaType options.
+
+| Zod Check | Mongoose Option | Target Types |
+| :--- | :--- | :--- |
+| `.min(n)` | `minlength: n` | `z.string()` |
+| `.max(n)` | `maxlength: n` | `z.string()` |
+| `.length(n)` | `minlength: n`, `maxlength: n` | `z.string()` |
+| `.regex(re)` | `match: re` | `z.string()` |
+| `.trim()` | `trim: true` | `z.string()` |
+| `.toLowerCase()` | `lowercase: true` | `z.string()` |
+| `.toUpperCase()` | `uppercase: true` | `z.string()` |
+| `.min(n)` / `.positive()` | `min: n` | `z.number()`, `z.date()` |
+| `.max(n)` / `.negative()` | `max: n` | `z.number()`, `z.date()` |
+
 ### Zod v4 & Mongoose 8 Support
 
 This package is now optimized for **Zod v4** and **Mongoose 8**.
@@ -34,6 +50,9 @@ The following table shows how Zod types are mapped to Mongoose types by default.
 | `z.bigint()` | `BigInt` | Fallback to `Number` if `BigInt` is not supported by the environment. |
 | `z.enum()` | `String` | Includes Mongoose `enum` validation. |
 | `z.nativeEnum()` | `String` | Includes Mongoose `enum` validation. |
+| `z.string().trim()` | `String` | Automatically sets `trim: true`. |
+| `z.string().toLowerCase()` | `String` | Automatically sets `lowercase: true`. |
+| `z.string().min(5)` | `String` | Automatically sets `minlength: 5`. |
 | `z.array()` | `[]` | Mapped to a Mongoose array of the inner type. |
 | `z.set()` | `[]` | Mapped to a Mongoose array of the value type. |
 | `z.tuple()` | `[]` | Mapped to a Mongoose array of the first item's type. |
@@ -56,12 +75,12 @@ The following Zod types are currently not explicitly handled or are unsupported 
 
 | Zod Type | Current Status | Recommended Alternative |
 | :--- | :--- | :--- |
-| `z.readonly()` | Falls back to `Mixed` | |
+| `z.readonly()` | `Base Type` | Automatically unwrapped, applies `readOnly: true` metadata. |
 | `z.promise()` | Unsupported | Not applicable for database schemas |
 | `z.function()` | Unsupported | Not applicable for database schemas |
 | `z.void()` / `z.never()` | Unsupported | |
 
-> **Note:** Types like `z.branded()`, `z.pipeline()`, `z.preprocess()`, and `z.transform()` are automatically unwrapped to their underlying base type during conversion.
+> **Note:** Types like `z.branded()`, `z.readonly()`, `z.pipeline()`, `z.preprocess()`, and `z.transform()` are automatically unwrapped to their underlying base type during conversion.
 
 ## Installation
 
@@ -191,8 +210,10 @@ Converts a Zod schema to a Mongoose schema definition object (the POJO used as t
 - `zodSchema`: A Zod object or any Zod type.
 
 ### `withMongoose(zodSchema, metadata)`
-Attaches Mongoose metadata to a Zod schema instance via the registry.
-- `metadata`: Object containing Mongoose field options (`unique`, `index`, `default`, `type`, etc.).
+Attaches Mongoose-specific metadata to any Zod schema.
+- `metadata`: A `MongooseMeta` object.
+
+`MongooseMeta` extends Mongoose's `SchemaTypeOptions<any>` and `SchemaOptions`, allowing you to specify both field-level options (like `index`, `unique`, `lowercase`) and top-level schema options (like `collection`, `versionKey`, `strict`) via the top-level Zod object.
 
 ### `zObjectId(options?)`
 Helper to create a Zod schema representing a Mongoose `ObjectId`.

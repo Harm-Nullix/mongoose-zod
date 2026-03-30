@@ -5,6 +5,8 @@ export interface SchemaFeatures {
   required?: boolean;
   isOptional?: boolean;
   isNullable?: boolean;
+  readOnly?: boolean;
+  checks?: any;
 }
 
 /**
@@ -108,8 +110,20 @@ export function unwrapZodSchema(
     return {schema, features};
   }
 
-  if (type === 'branded') {
-    return unwrapZodSchema((schema as any).unwrap(), features, visited);
+  if (type === 'branded' || type === 'readonly') {
+    return unwrapZodSchema(
+      (schema as any).unwrap(),
+      {
+        ...features,
+        ...(type === 'readonly' ? {readOnly: true} : {}),
+      },
+      visited,
+    );
+  }
+
+  // Extract checks if present
+  if (def.checks && Array.isArray(def.checks)) {
+    features.checks = [...(features.checks || []), ...def.checks];
   }
 
   return {schema, features};
