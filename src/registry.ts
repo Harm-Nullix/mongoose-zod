@@ -1,26 +1,14 @@
-import { z } from 'zod/v4';
-
+import {z} from 'zod/v4';
+import {SchemaTypeOptions} from 'mongoose';
 /**
- * 1. DEFINE THE METADATA SHAPE
+ * DEFINE THE METADATA SHAPE
  * This interface represents all the Mongoose-specific options you want to
- * support, including your custom application flags like `hiddenFromPublic`.
+ * support, including custom application flags.
  */
-export interface MongooseMeta {
-  type?: any; // Override the type (e.g., mongoose.Schema.Types.Mixed)
-  required?: boolean;
-  unique?: boolean;
-  index?: boolean;
-  default?: any | (() => any); // Mongoose allows functions for defaults
-  validate?: any;
-
-  // Custom application flags
-  hiddenFromPublic?: boolean;
-  readOnlyForDefaultPatch?: boolean;
-  readOnly?: boolean;
-  exposeCRUDViaSubRoutes?: boolean;
-
+export interface MongooseMeta extends SchemaTypeOptions<any> {
   // Schema-level options
   timestamps?: boolean | {createdAt?: string | boolean; updatedAt?: string | boolean};
+  discriminatorKey?: string;
 
   // Allow any other custom properties
   [key: string]: any;
@@ -37,10 +25,9 @@ export const mongooseRegistry = z.registry<MongooseMeta>();
  * 3. HELPER FUNCTION
  * A clean wrapper to attach Mongoose metadata to any Zod schema.
  */
-export function withMongoose<T extends z.ZodTypeAny>(
-  schema: T,
-  meta: MongooseMeta
-): T {
-  mongooseRegistry.add(schema, meta);
+export function withMongoose<T extends z.ZodTypeAny>(schema: T, meta: MongooseMeta): T {
+  const existing = mongooseRegistry.get(schema) || {};
+  // @ts-expect-error - TS sometimes struggles with complex Mongoose types in Registry
+  mongooseRegistry.add(schema, {...existing, ...meta});
   return schema;
 }

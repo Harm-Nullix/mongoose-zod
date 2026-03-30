@@ -35,12 +35,33 @@ The following table shows how Zod types are mapped to Mongoose types by default.
 | `z.enum()` | `String` | Includes Mongoose `enum` validation. |
 | `z.nativeEnum()` | `String` | Includes Mongoose `enum` validation. |
 | `z.array()` | `[]` | Mapped to a Mongoose array of the inner type. |
+| `z.set()` | `[]` | Mapped to a Mongoose array of the value type. |
+| `z.tuple()` | `[]` | Mapped to a Mongoose array of the first item's type. |
+| `z.record()` | `Map` | Mapped to a Mongoose `Map` with `of` type. |
+| `z.map()` | `Map` | Mapped to a Mongoose `Map` with `of` type. |
 | `z.object()` | `Nested Object` | Mapped to a nested Mongoose schema or subdocument. |
+| `z.intersection()` | `Merged Object` | Merges the definitions of both branches. |
 | `zObjectId()` | `mongoose.Schema.Types.ObjectId` | Specialized helper for ObjectIds. |
 | `zBuffer()` | `mongoose.Schema.Types.Buffer` | Specialized helper for Buffers. |
 | `z.instanceof(Buffer)` | `mongoose.Schema.Types.Buffer` | |
 | `z.instanceof(ObjectId)` | `mongoose.Schema.Types.ObjectId` | |
 | `z.any()` / `z.unknown()` | `mongoose.Schema.Types.Mixed` | Fallback for unhandled types. |
+| `z.union()` | `mongoose.Schema.Types.Mixed` | |
+| `z.discriminatedUnion()` | `mongoose.Schema.Types.Mixed` | |
+| `z.literal()` | `mongoose.Schema.Types.Mixed` | |
+
+### Unhandled and Unsupported Zod Types
+
+The following Zod types are currently not explicitly handled or are unsupported by nature and will fall back to `Mongoose.Schema.Types.Mixed` unless a custom type is provided via `withMongoose`.
+
+| Zod Type | Current Status | Recommended Alternative |
+| :--- | :--- | :--- |
+| `z.readonly()` | Falls back to `Mixed` | |
+| `z.promise()` | Unsupported | Not applicable for database schemas |
+| `z.function()` | Unsupported | Not applicable for database schemas |
+| `z.void()` / `z.never()` | Unsupported | |
+
+> **Note:** Types like `z.branded()`, `z.pipeline()`, `z.preprocess()`, and `z.transform()` are automatically unwrapped to their underlying base type during conversion.
 
 ## Installation
 
@@ -107,6 +128,35 @@ const userSchema = z.object({
 
 const mongooseSchema = toMongooseSchema(userSchema);
 // Mongoose schema will have { timestamps: true } automatically.
+```
+
+### Discriminators
+
+When using Mongoose discriminators, you can define the `discriminatorKey` in the base schema's metadata. To ensure type safety in TypeScript, it is recommended to also include the discriminator key field in your Zod schema.
+
+```typescript
+import { z } from 'zod/v4';
+import { toMongooseSchema, withMongoose } from 'mongoose-zod';
+
+const baseSchema = withMongoose(
+  z.object({
+    name: z.string(),
+    // Include the discriminator key in the Zod schema for type-safe access
+    type: z.string().optional(),
+  }),
+  { discriminatorKey: 'type' }
+);
+
+const BaseModel = mongoose.model('Base', toMongooseSchema(baseSchema));
+
+const carSchema = z.object({
+  licensePlate: z.string(),
+});
+
+const CarModel = BaseModel.discriminator('Car', toMongooseSchema(carSchema));
+
+const car = new CarModel({ name: 'My Car', type: 'Car', licensePlate: 'ABC-123' });
+console.log(car.type); // 'Car' (type-safe)
 ```
 
 ### Buffers and ObjectIds

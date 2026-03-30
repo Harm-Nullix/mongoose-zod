@@ -4,26 +4,57 @@ import {mongooseRegistry} from './registry.js';
 import {unwrapZodSchema} from './zod-helpers.js';
 
 /**
+ * Type-level mapping from Zod to Mongoose Schema Definitions
+ */
+export type ToMongooseType<T extends z.ZodTypeAny> =
+  T extends z.ZodObject<infer Shape>
+    ? {[K in keyof Shape]: Shape[K] extends z.ZodTypeAny ? ToMongooseType<Shape[K]> : any}
+    : T extends z.ZodArray<infer Element>
+      ? Element extends z.ZodTypeAny
+        ? Array<ToMongooseType<Element>> | {type: Array<any>; [key: string]: any}
+        : Array<any>
+      : T extends z.ZodOptional<infer Inner>
+        ? Inner extends z.ZodTypeAny
+          ? ToMongooseType<Inner>
+          : any
+        : T extends z.ZodDefault<infer Inner>
+          ? Inner extends z.ZodTypeAny
+            ? ToMongooseType<Inner>
+            : any
+          : T extends z.ZodNullable<infer Inner>
+            ? Inner extends z.ZodTypeAny
+              ? ToMongooseType<Inner>
+              : any
+            : SchemaDefinitionProperty<any> & {[key: string]: any};
+
+/**
  * THE CONVERTER (Safe AST Walker)
  * We extract the Zod type and merge it with any registered Mongoose metadata.
  */
-export function extractMongooseDef(
-  schema: z.ZodTypeAny,
+export function extractMongooseDef<T extends z.ZodTypeAny>(
+  schema: T,
   visited: Map<z.ZodTypeAny, any> = new Map(),
-): SchemaDefinitionProperty<any> {
+): ToMongooseType<T> {
   const {schema: unwrapped, features} = unwrapZodSchema(schema);
 
   // Pull any explicitly registered Mongoose metadata for the ORIGINAL schema instance
   // or any intermediate schemas if it's a chain of effects.
-  const meta = mongooseRegistry.get(schema) || mongooseRegistry.get(unwrapped) || {};
-  const mongooseProp: any = {...meta};
+  const meta = mongooseRegistry.get(schema) || {};
+  const unwrappedMeta = mongooseRegistry.get(unwrapped) || {};
+  const mongooseProp: any = {...unwrappedMeta, ...meta};
+
+  // If zObjectId() or similar were used, they might be wrapped in withMongoose again.
+  // zObjectId returns withMongoose(z.custom(), {type: ObjectId}).
+  // If we have nested metadata, we should prioritize the one that has a 'type' property.
+  // Actually, unwrappedMeta should have the type if it came from zObjectId.
+  // But if the user also used withMongoose(zObjectId(), {type: ...}), that should win.
 
   if (visited.has(unwrapped)) {
     const existing = visited.get(unwrapped);
     if (Object.keys(meta).length > 0) {
       Object.assign(existing, mongooseProp);
     }
-    return existing;
+    return existing as any;
   }
 
   // We must ensure recursive calls see the current object to break cycles.
@@ -59,23 +90,67 @@ export function extractMongooseDef(
     // If the developer didn't provide a strict Mongoose type override, return the shape
     if (!mongooseProp.type) {
       Object.assign(mongooseProp, objDef);
-      return objDef;
+      return objDef as any;
     }
 
     // If there is a type override, merge the object definition into the result
     Object.assign(mongooseProp, objDef);
   }
 
-  // 2. Handle Arrays
-  if (type === 'array') {
-    const innerDef = extractMongooseDef((unwrapped as any).element, visited);
+  // Handle Arrays, Sets and Tuples
+  if (type === 'array' || type === 'set' || type === 'tuple') {
+    const element =
+      (unwrapped as any).element ||
+      (unwrapped as any)._def.valueType ||
+      (unwrapped as any)._def.rest ||
+      (unwrapped as any)._def.items?.[0];
+
+    const innerDef = element ? extractMongooseDef(element, visited) : mongoose.Schema.Types.Mixed;
+
     // If no explicit type override, wrap the inner definition in an array
     if (!mongooseProp.type) {
-      mongooseProp.type = [(innerDef as any).type || innerDef];
+      const innerType = (innerDef as any).type || innerDef;
+      // Special case: If innerType is Mixed because of z.any(), we should represent it clearly
+      mongooseProp.type = [innerType];
     }
   }
 
-  // 3. Handle Primitives
+  // Handle Records and Maps
+  if (type === 'record' || type === 'map') {
+    const valueType = (unwrapped as any).valueSchema || (unwrapped as any)._def.valueType;
+    if (!mongooseProp.type) {
+      mongooseProp.type = Map;
+      if (valueType) {
+        const innerDef = extractMongooseDef(valueType, visited);
+        mongooseProp.of = (innerDef as any).type || innerDef;
+      }
+    }
+  }
+
+  // Handle Intersections
+  if (type === 'intersection') {
+    const left = extractMongooseDef((unwrapped as any)._def.left, visited);
+    const right = extractMongooseDef((unwrapped as any)._def.right, visited);
+
+    if (typeof left === 'object' && typeof right === 'object') {
+      Object.assign(mongooseProp, left, right);
+    } else if (!mongooseProp.type) {
+      mongooseProp.type = mongoose.Schema.Types.Mixed;
+    }
+  }
+
+  // Handle Unions
+  if (
+    (type === 'union' ||
+      type === 'discriminatedunion' ||
+      type === 'discriminated_union' ||
+      type === 'literal') &&
+    !mongooseProp.type
+  ) {
+    mongooseProp.type = mongoose.Schema.Types.Mixed;
+  }
+
+  // Handle Primitives
   switch (type) {
     case 'string': {
       if (!mongooseProp.type) mongooseProp.type = String;
@@ -114,7 +189,7 @@ export function extractMongooseDef(
     // Do nothing
   }
 
-  // 4. Handle Enums
+  // Handle Enums
   if (type === 'enum') {
     if (!mongooseProp.type) mongooseProp.type = String;
     mongooseProp.enum = (unwrapped as any).options || def.values;
@@ -125,7 +200,7 @@ export function extractMongooseDef(
     if (mongooseProp.required !== false) mongooseProp.required = true;
   }
 
-  // 5. Handle Specialized Types (Buffer, ObjectId)
+  // Handle Specialized Types (Buffer, ObjectId)
   if (type === 'any' || type === 'unknown' || type === 'custom') {
     const cls = def.cls || (unwrapped as any).cls;
     if (cls === Buffer) {
@@ -138,7 +213,7 @@ export function extractMongooseDef(
     }
   }
 
-  // 6. Handle Lazy (Recursion Support)
+  // Handle Lazy (Recursion Support)
   if (type === 'lazy') {
     const inner = def.getter();
     // Re-call with the inner schema, passing the visited map to break cycles
@@ -150,9 +225,9 @@ export function extractMongooseDef(
       } else {
         mongooseProp.type = (result as any).type || result;
       }
-      return mongooseProp;
+      return mongooseProp as any;
     }
-    return result;
+    return result as any;
   }
 
   // Fallback for z.any() or unhandled types
@@ -160,13 +235,13 @@ export function extractMongooseDef(
     mongooseProp.type = mongoose.Schema.Types.Mixed;
   }
 
-  return mongooseProp;
+  return mongooseProp as any;
 }
 
-export function toMongooseSchema(
-  schema: z.ZodObject<any> | z.ZodTypeAny,
+export function toMongooseSchema<T extends z.ZodTypeAny>(
+  schema: T,
   options?: mongoose.SchemaOptions,
-): mongoose.Schema {
+): mongoose.Schema<z.infer<T>> {
   const {schema: unwrapped} = unwrapZodSchema(schema);
   const meta =
     mongooseRegistry.get(schema) ||
@@ -178,7 +253,8 @@ export function toMongooseSchema(
   const mergedOptions = {
     ...options,
     ...(meta.timestamps ? {timestamps: meta.timestamps} : {}),
+    ...(meta.discriminatorKey ? {discriminatorKey: meta.discriminatorKey} : {}),
   };
   const definition = extractMongooseDef(schema);
-  return new mongoose.Schema(definition as any, mergedOptions);
+  return new mongoose.Schema<z.infer<T>>(definition as any, mergedOptions as any);
 }

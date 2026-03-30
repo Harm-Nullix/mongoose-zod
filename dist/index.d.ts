@@ -1,26 +1,17 @@
 import { z } from 'zod/v4';
-import mongoose, { SchemaDefinitionProperty } from 'mongoose';
+import mongoose, { SchemaTypeOptions, SchemaDefinitionProperty } from 'mongoose';
 
 /**
- * 1. DEFINE THE METADATA SHAPE
+ * DEFINE THE METADATA SHAPE
  * This interface represents all the Mongoose-specific options you want to
- * support, including your custom application flags like `hiddenFromPublic`.
+ * support, including custom application flags.
  */
-interface MongooseMeta {
-    type?: any;
-    required?: boolean;
-    unique?: boolean;
-    index?: boolean;
-    default?: any | (() => any);
-    validate?: any;
-    hiddenFromPublic?: boolean;
-    readOnlyForDefaultPatch?: boolean;
-    readOnly?: boolean;
-    exposeCRUDViaSubRoutes?: boolean;
+interface MongooseMeta extends SchemaTypeOptions<any> {
     timestamps?: boolean | {
         createdAt?: string | boolean;
         updatedAt?: string | boolean;
     };
+    discriminatorKey?: string;
     [key: string]: any;
 }
 /**
@@ -36,11 +27,22 @@ declare const mongooseRegistry: z.core.$ZodRegistry<MongooseMeta, z.core.$ZodTyp
 declare function withMongoose<T extends z.ZodTypeAny>(schema: T, meta: MongooseMeta): T;
 
 /**
+ * Type-level mapping from Zod to Mongoose Schema Definitions
+ */
+type ToMongooseType<T extends z.ZodTypeAny> = T extends z.ZodObject<infer Shape> ? {
+    [K in keyof Shape]: Shape[K] extends z.ZodTypeAny ? ToMongooseType<Shape[K]> : any;
+} : T extends z.ZodArray<infer Element> ? Element extends z.ZodTypeAny ? Array<ToMongooseType<Element>> | {
+    type: Array<any>;
+    [key: string]: any;
+} : Array<any> : T extends z.ZodOptional<infer Inner> ? Inner extends z.ZodTypeAny ? ToMongooseType<Inner> : any : T extends z.ZodDefault<infer Inner> ? Inner extends z.ZodTypeAny ? ToMongooseType<Inner> : any : T extends z.ZodNullable<infer Inner> ? Inner extends z.ZodTypeAny ? ToMongooseType<Inner> : any : SchemaDefinitionProperty<any> & {
+    [key: string]: any;
+};
+/**
  * THE CONVERTER (Safe AST Walker)
  * We extract the Zod type and merge it with any registered Mongoose metadata.
  */
-declare function extractMongooseDef(schema: z.ZodTypeAny, visited?: Map<z.ZodTypeAny, any>): SchemaDefinitionProperty<any>;
-declare function toMongooseSchema(schema: z.ZodObject<any> | z.ZodTypeAny, options?: mongoose.SchemaOptions): mongoose.Schema;
+declare function extractMongooseDef<T extends z.ZodTypeAny>(schema: T, visited?: Map<z.ZodTypeAny, any>): ToMongooseType<T>;
+declare function toMongooseSchema<T extends z.ZodTypeAny>(schema: T, options?: mongoose.SchemaOptions): mongoose.Schema<z.infer<T>>;
 
 type StringLiteral<T> = T extends string ? (string extends T ? never : T) : never;
 declare const zObjectId: (options?: MongooseMeta) => z.ZodCustom<mongoose.Types.ObjectId, mongoose.Types.ObjectId>;
@@ -51,4 +53,4 @@ declare const genTimestampsSchema: <CrAt = "createdAt", UpAt = "updatedAt">(crea
 declare const bufferMongooseGetter: (value: unknown) => any;
 
 export { bufferMongooseGetter, extractMongooseDef, genTimestampsSchema, mongooseRegistry, toMongooseSchema, withMongoose, zBuffer, zObjectId };
-export type { MongooseMeta };
+export type { MongooseMeta, ToMongooseType };
