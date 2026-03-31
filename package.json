@@ -5,16 +5,17 @@
   "scripts": {
     "lint:eslint": "eslint",
     "lint:eslint:fix": "eslint --fix",
-    "lint:editorconfig": "editorconfig-checker --exclude .git --exclude dist",
+    "lint:editorconfig": "editorconfig-checker --exclude .git --exclude dist --exclude *.md",
     "lint:types": "tsc --noEmit",
-    "lint": "npm run lint:editorconfig && npm run lint:types && npm run lint:eslint",
+    "lint": "pnpm lint:editorconfig && pnpm lint:types && pnpm lint:eslint",
     "test:unit": "bun test",
     "test:unit:watch": "bun test --watch",
-    "test": "npm run lint && npm run test:unit",
+    "test": "pnpm lint && pnpm test:unit",
     "build": "rimraf dist && rollup -c",
-    "prepublishOnly": "npm run test && npm run build",
+    "prepublishOnly": "pnpm test && pnpm build",
     "release": "bumpp && pnpm publish --access public"
   },
+  "packageManager": "pnpm@9.11.0",
   "homepage": "https://github.com/andreww2012/mongoose-zod",
   "repository": {
     "type": "git",
@@ -97,15 +98,6 @@
   },
   "peerDependenciesMeta": {
     "mongoose": {
-      "optional": true
-    },
-    "mongoose-lean-defaults": {
-      "optional": true
-    },
-    "mongoose-lean-getters": {
-      "optional": true
-    },
-    "mongoose-lean-virtuals": {
       "optional": true
     }
   }

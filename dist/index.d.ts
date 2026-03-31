@@ -9,8 +9,7 @@ import mongoose, { SchemaTypeOptions, SchemaOptions, SchemaDefinitionProperty } 
  * for top-level schema properties, allowing withMongoose to be used on any Zod schema.
  */
 interface MongooseMeta extends SchemaTypeOptions<any>, SchemaOptions {
-    hiddenFromPublic?: boolean;
-    readOnly?: boolean;
+    explicitId?: boolean;
     [key: string]: any;
 }
 /**
@@ -42,7 +41,7 @@ declare function extractMongooseDef<T extends z.ZodTypeAny>(schema: T, visited?:
 declare function toMongooseSchema<T extends z.ZodTypeAny>(schema: T, options?: SchemaOptions): mongoose.Schema<z.infer<T>>;
 
 type StringLiteral<T> = T extends string ? (string extends T ? never : T) : never;
-declare const zObjectId: (options?: MongooseMeta) => z.ZodString | z.ZodCustom<mongoose.Types.ObjectId, mongoose.Types.ObjectId>;
+declare const zObjectId: (options?: MongooseMeta) => z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString> | z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodCustom<mongoose.Types.ObjectId, mongoose.Types.ObjectId>>;
 declare const zBuffer: (options?: MongooseMeta) => z.ZodCustom<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> | z.ZodCustom<Buffer<ArrayBufferLike>, Buffer<ArrayBufferLike>>;
 declare const zPopulated: <T extends z.ZodTypeAny>(ref: string, schema: T, options?: MongooseMeta) => z.ZodUnion<readonly [z.ZodString | z.ZodCustom<mongoose.Types.ObjectId, mongoose.Types.ObjectId>, T]>;
 declare const genTimestampsSchema: <CrAt = "createdAt", UpAt = "updatedAt">(createdAtField?: StringLiteral<CrAt | "createdAt"> | null, updatedAtField?: StringLiteral<UpAt | "updatedAt"> | null) => z.ZodObject<{

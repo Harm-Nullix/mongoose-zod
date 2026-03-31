@@ -13,7 +13,7 @@ export const getFrontendMode = () => {
   // Try to auto-detect if not explicitly set
   // This is a simple heuristic: check for window/document
   if (isFrontend === undefined || isFrontend === null) {
-    return globalThis.window !== undefined && globalThis.document !== undefined;
+    return (globalThis as any).window !== undefined && (globalThis as any).document !== undefined;
   }
   return isFrontend;
 };

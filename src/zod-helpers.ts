@@ -21,15 +21,25 @@ export function unwrapZodSchema(
 ): {schema: z.ZodTypeAny; features: SchemaFeatures} {
   if (!schema) return {schema, features};
   if (visited.has(schema)) return {schema, features};
-  visited.add(schema);
 
   const def = (schema as any)._def;
   if (!def) return {schema, features};
 
+  // Skip visited check for wrappers to allow deep unwrapping
+  if (
+    !(schema instanceof z.ZodOptional) &&
+    !(schema instanceof z.ZodNullable) &&
+    !(schema instanceof z.ZodDefault) &&
+    def.type !== 'pipe'
+  ) {
+    visited.add(schema);
+  }
+
   if (schema instanceof z.ZodOptional) {
+    const inner = schema.unwrap();
     return unwrapZodSchema(
       // @ts-expect-error Zod v4 schema.unwrap() return type mismatch
-      schema.unwrap(),
+      inner,
       {
         ...features,
         required: false,

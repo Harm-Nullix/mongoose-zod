@@ -8,8 +8,16 @@ import {unwrapZodSchema} from './zod-helpers.js';
 const getMongoose = () => {
   try {
     // eslint-disable-next-line global-require
-    return require('mongoose');
+    const m = require('mongoose');
+    if (m && (m.Schema || m.default?.Schema)) {
+      return m.default || m;
+    }
+    return m;
   } catch {
+    // Try to see if mongoose is globally available (e.g. in some environments)
+    if ((globalThis as any).mongoose) {
+      return (globalThis as any).mongoose;
+    }
     return null;
   }
 };
@@ -52,13 +60,27 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
   // or any intermediate schemas if it's a chain of effects.
   const meta = mongooseRegistry.get(schema) || {};
   const unwrappedMeta = mongooseRegistry.get(unwrapped) || {};
-  const mongooseProp: any = {...unwrappedMeta, ...meta};
 
-  // If zObjectId() or similar were used, they might be wrapped in withMongoose again.
-  // zObjectId returns withMongoose(z.custom(), {type: ObjectId}).
-  // If we have nested metadata, we should prioritize the one that has a 'type' property.
-  // Actually, unwrappedMeta should have the type if it came from zObjectId.
-  // But if the user also used withMongoose(zObjectId(), {type: ...}), that should win.
+  // If we have a chain of wrappers (e.g. zObjectId().optional()), we should collect
+  // metadata from all of them.
+  let currentMeta = {...unwrappedMeta, ...meta};
+  if ((schema as any)._def.innerType) {
+    let inner = (schema as any)._def.innerType;
+    while (inner) {
+      const innerMeta = mongooseRegistry.get(inner);
+      if (innerMeta) {
+        currentMeta = {...innerMeta, ...currentMeta};
+      }
+      inner = inner._def?.innerType || inner._def?.schema;
+    }
+  }
+  const mongooseProp: any = currentMeta;
+
+  if (features.isOptional === true && mongooseProp.type && mongooseProp.required !== true) {
+    // If it was explicitly marked as optional in Zod, and it's a leaf node (has a type),
+    // we respect that by setting required: false, unless the user explicitly forced required: true in meta.
+    mongooseProp.required = false;
+  }
 
   if (visited.has(unwrapped)) {
     const existing = visited.get(unwrapped);
@@ -145,6 +167,13 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
     // eslint-disable-next-line no-restricted-syntax
     for (const key in shape) {
       if (!Object.prototype.hasOwnProperty.call(shape, key)) continue;
+      // Skip automatic _id mapping unless explicitly requested
+      if (key === '_id') {
+        const idMeta = mongooseRegistry.get(shape[key]) || {};
+        const unwrappedId = unwrapZodSchema(shape[key]).schema;
+        const unwrappedIdMeta = mongooseRegistry.get(unwrappedId) || {};
+        if (idMeta.includeId !== true && unwrappedIdMeta.includeId !== true) continue;
+      }
       objDef[key] = extractMongooseDef(shape[key], visited);
     }
     // If the developer didn't provide a strict Mongoose type override, return the shape
@@ -187,8 +216,10 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
       (unwrapped as any)._def.rest ||
       (unwrapped as any)._def.items?.[0];
 
-  const mongoose = getMongoose();
-  const innerDef = element ? extractMongooseDef(element, visited) : (mongoose?.Schema.Types.Mixed || 'Mixed');
+    const mongoose = getMongoose();
+    const innerDef = element
+      ? extractMongooseDef(element, visited)
+      : mongoose?.Schema.Types.Mixed || 'Mixed';
 
     // If no explicit type override, wrap the inner definition in an array
     if (!mongooseProp.type) {
@@ -229,7 +260,7 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
   }
 
   // Handle Unions
-    if (
+  if (
     (type === 'union' ||
       type === 'discriminatedunion' ||
       type === 'discriminated_union' ||
@@ -346,23 +377,28 @@ export function toMongooseSchema<T extends z.ZodTypeAny>(
     // eslint-disable-next-line unicorn/no-negated-condition
     ...(meta.strict !== undefined ? {strict: meta.strict} : {}),
     // eslint-disable-next-line unicorn/no-negated-condition
-    ...(meta.id !== undefined ? {id: meta.id} : {}),
-    // eslint-disable-next-line unicorn/no-negated-condition
-    ...(meta._id !== undefined ? {_id: meta._id} : {}),
-    // eslint-disable-next-line unicorn/no-negated-condition
     ...(meta.minimize !== undefined ? {minimize: meta.minimize} : {}),
     // eslint-disable-next-line unicorn/no-negated-condition
     ...(meta.validateBeforeSave !== undefined ? {validateBeforeSave: meta.validateBeforeSave} : {}),
     // eslint-disable-next-line unicorn/no-negated-condition
     ...(meta.versionKey !== undefined ? {versionKey: meta.versionKey} : {}),
+    ...(meta.id === undefined ? {} : {id: meta.id}),
+    ...(meta._id === undefined ? {} : {_id: meta._id}),
     ...(meta.timestamps ? {timestamps: meta.timestamps} : {}),
     ...(meta.discriminatorKey ? {discriminatorKey: meta.discriminatorKey} : {}),
     ...options,
   };
+  const definition = extractMongooseDef(schema) as SchemaDefinition;
   const mongoose = getMongoose();
   if (!mongoose) {
-    throw new Error('Mongoose must be installed to use toMongooseSchema');
+    // Last ditch effort: check if it's imported in the global scope
+    const globalMongoose = (globalThis as any).mongoose;
+    if (globalMongoose) {
+      return new globalMongoose.Schema(definition, mergedOptions) as any;
+    }
+    throw new Error(
+      'Mongoose must be installed to use toMongooseSchema. If you are in an ESM environment, ensure mongoose is loaded.',
+    );
   }
-  const definition = extractMongooseDef(schema) as SchemaDefinition;
   return new mongoose.Schema(definition, mergedOptions) as any;
 }

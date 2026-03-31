@@ -38,4 +38,22 @@ describe('Mongoose Schema Options via withMongoose', () => {
 
     expect(schema.get('collection')).toBe('overridden_collection');
   });
+
+  test('should support _id: false and id: false in schema options', () => {
+    const UserZodSchema = withMongoose(
+      z.object({
+        name: z.string(),
+      }),
+      {_id: false, id: false},
+    );
+
+    const UserSchema = toMongooseSchema(UserZodSchema);
+
+    // Mongoose schema options are stored in schema.options
+    expect(UserSchema.get('_id')).toBe(false);
+    expect(UserSchema.get('id')).toBe(false);
+
+    // Check if _id is present in paths
+    expect(UserSchema.path('_id')).toBeUndefined();
+  });
 });

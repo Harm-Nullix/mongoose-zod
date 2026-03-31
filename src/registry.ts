@@ -8,9 +8,7 @@ import type {SchemaOptions, SchemaTypeOptions} from 'mongoose';
  * for top-level schema properties, allowing withMongoose to be used on any Zod schema.
  */
 export interface MongooseMeta extends SchemaTypeOptions<any>, SchemaOptions {
-  // Application-specific custom flags
-  hiddenFromPublic?: boolean;
-  readOnly?: boolean;
+  explicitId?: boolean;
 
   // Allow any other custom properties
   [key: string]: any;

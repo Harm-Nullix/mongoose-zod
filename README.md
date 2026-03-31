@@ -38,6 +38,7 @@ Key features:
 - **Specialized Types**: Direct support for `Buffer` and `ObjectId` via `zObjectId()` and `zBuffer()` helpers (or `z.instanceof()`).
 - **Isomorphic Support**: Use `setFrontendMode(true)` to allow schemas to be used in frontend environments where Mongoose is not available. Specialized types will automatically fall back to strings/Uint8Arrays while preserving Mongoose metadata for the backend.
 - **Frontend Safe**: The package treats `mongoose` as an optional peer dependency. Core Zod schema definition and metadata helpers (`withMongoose`, `zObjectId`, etc.) are safe to use in the browser without installing `mongoose`.
+- **Nuxt 4 Ready**: Fully compatible with Nuxt 4 and Nitro, supporting best practices like `readValidatedBody` with Zod schemas.
 
 ### Type Conversion Table
 
@@ -87,10 +88,10 @@ The following Zod types are currently not explicitly handled or are unsupported 
 
 ## Installation
 
-Install the package from [npm](https://www.npmjs.com/package/mongoose-zod):
+Install the package:
 
 ```shell
-npm i mongoose-zod
+pnpm add mongoose-zod
 ```
 
 ### Peer Dependencies

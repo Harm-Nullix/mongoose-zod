@@ -23,7 +23,14 @@ const compat = new FlatCompat({
 });
 
 module.exports = defineConfig([
-  globalIgnores(['**/dist/', '**/node_modules/', '**/.idea', '**/oldSrc']),
+  globalIgnores([
+    '**/dist/',
+    '**/node_modules/',
+    '**/.idea',
+    '**/oldSrc',
+    '**/playground/.nuxt',
+    '**/playground/.output',
+  ]),
   js.configs.recommended,
   sonarjs.configs.recommended,
   unicorn.configs.recommended,
@@ -121,14 +128,7 @@ module.exports = defineConfig([
       'unicorn/prevent-abbreviations': 0,
       'unicorn/explicit-length-check': 0,
 
-      'import/extensions': [
-        2,
-        'ignorePackages',
-        {
-          js: 'always',
-          ts: 'never',
-        },
-      ],
+      'import/extensions': 0,
 
       'import/order': 0,
       'no-unused-vars': 0,

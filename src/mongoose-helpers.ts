@@ -17,19 +17,28 @@ type StringLiteral<T> = T extends string ? (string extends T ? never : T) : neve
 
 export const zObjectId = (options?: MongooseMeta) => {
   if (getFrontendMode()) {
-    return withMongoose(z.string().regex(/^[\dA-Fa-f]{24}$/, 'Invalid ObjectId'), {
-      type: 'ObjectId', // String representation for metadata
-      ...options,
-    });
+    return withMongoose(
+      z.preprocess(
+        (val) => (val === null ? undefined : val),
+        z.string().regex(/^[\dA-Fa-f]{24}$/, 'Invalid ObjectId'),
+      ),
+      {
+        type: 'ObjectId', // String representation for metadata
+        ...options,
+      },
+    );
   }
 
   const mongoose = getMongooseTypes();
 
   return withMongoose(
-    z.custom<mongoose.Types.ObjectId>(
-      (val) =>
-        (mongoose && val instanceof mongoose.Types.ObjectId) ||
-        (typeof val === 'string' && /^[\dA-Fa-f]{24}$/.test(val)),
+    z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.custom<mongoose.Types.ObjectId>(
+        (val) =>
+          (mongoose && val instanceof mongoose.Types.ObjectId) ||
+          (typeof val === 'string' && /^[\dA-Fa-f]{24}$/.test(val)),
+      ),
     ),
     {
       type: mongoose?.Schema.Types.ObjectId || 'ObjectId',

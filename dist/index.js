@@ -26,14 +26,21 @@ features = { required: true }, visited = new Set()) {
         return { schema, features };
     if (visited.has(schema))
         return { schema, features };
-    visited.add(schema);
     const def = schema._def;
     if (!def)
         return { schema, features };
+    // Skip visited check for wrappers to allow deep unwrapping
+    if (!(schema instanceof z.ZodOptional) &&
+        !(schema instanceof z.ZodNullable) &&
+        !(schema instanceof z.ZodDefault) &&
+        def.type !== 'pipe') {
+        visited.add(schema);
+    }
     if (schema instanceof z.ZodOptional) {
+        const inner = schema.unwrap();
         return unwrapZodSchema(
         // @ts-expect-error Zod v4 schema.unwrap() return type mismatch
-        schema.unwrap(), {
+        inner, {
             ...features,
             required: false,
             isOptional: true,
@@ -108,9 +115,17 @@ features = { required: true }, visited = new Set()) {
 const getMongoose = () => {
     try {
         // eslint-disable-next-line global-require
-        return require('mongoose');
+        const m = require('mongoose');
+        if (m && (m.Schema || m.default?.Schema)) {
+            return m.default || m;
+        }
+        return m;
     }
     catch {
+        // Try to see if mongoose is globally available (e.g. in some environments)
+        if (globalThis.mongoose) {
+            return globalThis.mongoose;
+        }
         return null;
     }
 };
@@ -124,12 +139,25 @@ function extractMongooseDef(schema, visited = new Map()) {
     // or any intermediate schemas if it's a chain of effects.
     const meta = mongooseRegistry.get(schema) || {};
     const unwrappedMeta = mongooseRegistry.get(unwrapped) || {};
-    const mongooseProp = { ...unwrappedMeta, ...meta };
-    // If zObjectId() or similar were used, they might be wrapped in withMongoose again.
-    // zObjectId returns withMongoose(z.custom(), {type: ObjectId}).
-    // If we have nested metadata, we should prioritize the one that has a 'type' property.
-    // Actually, unwrappedMeta should have the type if it came from zObjectId.
-    // But if the user also used withMongoose(zObjectId(), {type: ...}), that should win.
+    // If we have a chain of wrappers (e.g. zObjectId().optional()), we should collect
+    // metadata from all of them.
+    let currentMeta = { ...unwrappedMeta, ...meta };
+    if (schema._def.innerType) {
+        let inner = schema._def.innerType;
+        while (inner) {
+            const innerMeta = mongooseRegistry.get(inner);
+            if (innerMeta) {
+                currentMeta = { ...innerMeta, ...currentMeta };
+            }
+            inner = inner._def?.innerType || inner._def?.schema;
+        }
+    }
+    const mongooseProp = currentMeta;
+    if (features.isOptional === true && mongooseProp.type && mongooseProp.required !== true) {
+        // If it was explicitly marked as optional in Zod, and it's a leaf node (has a type),
+        // we respect that by setting required: false, unless the user explicitly forced required: true in meta.
+        mongooseProp.required = false;
+    }
     if (visited.has(unwrapped)) {
         const existing = visited.get(unwrapped);
         if (Object.keys(meta).length > 0) {
@@ -209,6 +237,14 @@ function extractMongooseDef(schema, visited = new Map()) {
         for (const key in shape) {
             if (!Object.prototype.hasOwnProperty.call(shape, key))
                 continue;
+            // Skip automatic _id mapping unless explicitly requested
+            if (key === '_id') {
+                const idMeta = mongooseRegistry.get(shape[key]) || {};
+                const unwrappedId = unwrapZodSchema(shape[key]).schema;
+                const unwrappedIdMeta = mongooseRegistry.get(unwrappedId) || {};
+                if (idMeta.includeId !== true && unwrappedIdMeta.includeId !== true)
+                    continue;
+            }
             objDef[key] = extractMongooseDef(shape[key], visited);
         }
         // If the developer didn't provide a strict Mongoose type override, return the shape
@@ -251,7 +287,9 @@ function extractMongooseDef(schema, visited = new Map()) {
             unwrapped._def.rest ||
             unwrapped._def.items?.[0];
         const mongoose = getMongoose();
-        const innerDef = element ? extractMongooseDef(element, visited) : (mongoose?.Schema.Types.Mixed || 'Mixed');
+        const innerDef = element
+            ? extractMongooseDef(element, visited)
+            : mongoose?.Schema.Types.Mixed || 'Mixed';
         // If no explicit type override, wrap the inner definition in an array
         if (!mongooseProp.type) {
             const innerType = innerDef.type || innerDef;
@@ -399,24 +437,27 @@ function toMongooseSchema(schema, options) {
         // eslint-disable-next-line unicorn/no-negated-condition
         ...(meta.strict !== undefined ? { strict: meta.strict } : {}),
         // eslint-disable-next-line unicorn/no-negated-condition
-        ...(meta.id !== undefined ? { id: meta.id } : {}),
-        // eslint-disable-next-line unicorn/no-negated-condition
-        ...(meta._id !== undefined ? { _id: meta._id } : {}),
-        // eslint-disable-next-line unicorn/no-negated-condition
         ...(meta.minimize !== undefined ? { minimize: meta.minimize } : {}),
         // eslint-disable-next-line unicorn/no-negated-condition
         ...(meta.validateBeforeSave !== undefined ? { validateBeforeSave: meta.validateBeforeSave } : {}),
         // eslint-disable-next-line unicorn/no-negated-condition
         ...(meta.versionKey !== undefined ? { versionKey: meta.versionKey } : {}),
+        ...(meta.id === undefined ? {} : { id: meta.id }),
+        ...(meta._id === undefined ? {} : { _id: meta._id }),
         ...(meta.timestamps ? { timestamps: meta.timestamps } : {}),
         ...(meta.discriminatorKey ? { discriminatorKey: meta.discriminatorKey } : {}),
         ...options,
     };
+    const definition = extractMongooseDef(schema);
     const mongoose = getMongoose();
     if (!mongoose) {
-        throw new Error('Mongoose must be installed to use toMongooseSchema');
+        // Last ditch effort: check if it's imported in the global scope
+        const globalMongoose = globalThis.mongoose;
+        if (globalMongoose) {
+            return new globalMongoose.Schema(definition, mergedOptions);
+        }
+        throw new Error('Mongoose must be installed to use toMongooseSchema. If you are in an ESM environment, ensure mongoose is loaded.');
     }
-    const definition = extractMongooseDef(schema);
     return new mongoose.Schema(definition, mergedOptions);
 }
 
@@ -450,14 +491,14 @@ const getMongooseTypes = () => {
 };
 const zObjectId = (options) => {
     if (getFrontendMode()) {
-        return withMongoose(z.string().regex(/^[\dA-Fa-f]{24}$/, 'Invalid ObjectId'), {
+        return withMongoose(z.preprocess((val) => (val === null ? undefined : val), z.string().regex(/^[\dA-Fa-f]{24}$/, 'Invalid ObjectId')), {
             type: 'ObjectId', // String representation for metadata
             ...options,
         });
     }
     const mongoose = getMongooseTypes();
-    return withMongoose(z.custom((val) => (mongoose && val instanceof mongoose.Types.ObjectId) ||
-        (typeof val === 'string' && /^[\dA-Fa-f]{24}$/.test(val))), {
+    return withMongoose(z.preprocess((val) => (val === null ? undefined : val), z.custom((val) => (mongoose && val instanceof mongoose.Types.ObjectId) ||
+        (typeof val === 'string' && /^[\dA-Fa-f]{24}$/.test(val)))), {
         type: mongoose?.Schema.Types.ObjectId || 'ObjectId',
         ...options,
     });
