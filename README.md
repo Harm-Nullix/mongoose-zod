@@ -63,7 +63,7 @@ The following table shows how Zod types are mapped to Mongoose types by default.
 | `z.map()` | `Map` | Mapped to a Mongoose `Map` with `of` type. |
 | `z.object()` | `Nested Object` | Mapped to a nested Mongoose schema or subdocument. |
 | `z.intersection()` | `Merged Object` | Merges the definitions of both branches. |
-| `zObjectId()` | `mongoose.Schema.Types.ObjectId` | Specialized helper for ObjectIds. |
+| `zObjectId()` | `mongoose.Schema.Types.ObjectId` | Specialized helper for ObjectIds. By default, it is omitted from the generated Mongoose schema to let Mongoose handle its auto-generation. |
 | `zBuffer()` | `mongoose.Schema.Types.Buffer` | Specialized helper for Buffers. |
 | `zPopulated()` | `mongoose.Schema.Types.ObjectId` | Helper for fields that can be either an `ObjectId` or a populated object. |
 | `z.instanceof(Buffer)` | `mongoose.Schema.Types.Buffer` | |
@@ -184,6 +184,37 @@ const car = new CarModel({ name: 'My Car', type: 'Car', licensePlate: 'ABC-123' 
 console.log(car.type); // 'Car' (type-safe)
 ```
 
+### ObjectIds and `_id` Handling
+
+By default, `zObjectId()` creates a required Zod field (unless `.optional()` is used) but **omits** the field from the generated Mongoose schema. This allows Mongoose to manage the automatic generation and internal lifecycle of the `_id` field without conflicts.
+
+#### 1. Standard Usage (Recommended)
+For full document schemas, include the `_id` field using `zObjectId()`.
+
+```typescript
+const UserZodSchema = z.object({
+  _id: zObjectId(), // Required for Zod validation, omitted from Mongoose schema
+  name: z.string(),
+});
+```
+
+#### 2. Input/Create Schemas
+When validating data for new records (e.g., in a `POST` request), you should use an **Input Schema** that omits the `_id` field. This ensures that the client cannot provide an ID that Mongoose should be generating.
+
+```typescript
+const UserInputSchema = UserZodSchema.omit({ _id: true });
+// Now UserInputSchema.parse({}) will succeed without an _id.
+```
+
+#### 3. Explicitly Defining `_id` in Mongoose
+If you need to explicitly define the `_id` field in the Mongoose schema (e.g., to add an index, a custom getter, or to disable auto-generation), use the `includeId: true` flag.
+
+```typescript
+const CustomIdSchema = z.object({
+  _id: zObjectId({ includeId: true, index: true }),
+});
+```
+
 ### Buffers and ObjectIds
 
 For specialized Mongoose types, use the provided `zObjectId()` and `zBuffer()` helpers. They also accept optional metadata.
@@ -207,12 +238,12 @@ You can also use `z.instanceof(Buffer)` or `z.instanceof(mongoose.Types.ObjectId
 ## API Reference
 
 ### `toMongooseSchema(zodSchema, options?)`
-Converts a Zod schema to a Mongoose schema instance.
+Converts a Zod schema to a Mongoose schema instance (`new mongoose.Schema(...)`).
 - `zodSchema`: A Zod object or any Zod type.
 - `options`: Optional Mongoose `SchemaOptions`.
 
 ### `extractMongooseDef(zodSchema)`
-Converts a Zod schema to a Mongoose schema definition object (the POJO used as the first argument to `new mongoose.Schema(...)`).
+Converts a Zod schema to a Mongoose schema definition object (the POJO used as the first argument to `new mongoose.Schema(...)`). This is useful if you want to manually create the Mongoose schema or combine it with other definitions.
 - `zodSchema`: A Zod object or any Zod type.
 
 ### `withMongoose(zodSchema, metadata)`
@@ -260,7 +291,7 @@ Returns a Zod object with timestamp fields.
 The following features from older versions of `mongoose-zod` (Mongoose 7 / Zod 3) are no longer supported or have changed:
 
 - **`mongooseZodCustomType()`**: This was previously used to directly define a Mongoose type on a Zod schema. In the new version, use `withMongoose(z.any(), { type: mongoose.Schema.Types.YourType })` or specialized helpers like `zObjectId()` and `zBuffer()`.
-- **`toZodMongooseSchema()`**: Previously, this returned a `ZodMongoose` wrapper used to generate the Mongoose schema. This function has been replaced by `extractMongooseDef()` which returns the raw Mongoose schema definition (POJO), or `toMongooseSchema()` which returns a full `mongoose.Schema` instance.
+- **`toZodMongooseSchema()`**: Previously, this returned a `ZodMongoose` wrapper used to generate the Mongoose schema. This function has been replaced by `toMongooseSchema()` which returns a full `mongoose.Schema` instance, or `extractMongooseDef()` which returns the raw Mongoose schema definition (POJO).
 - **`toMongooseSchema()`**: In the old version, this was a method on the `ZodMongoose` instance. Now it's a standalone function that accepts a Zod schema and returns a `mongoose.Schema` object.
 - **`ZodMongoose` class**: Replaced by standard Zod types with registry-stored metadata.
 - **`setup({ z })`**: No longer required. The library uses the `zod/v4` registry directly and does not modify the Zod prototype.
