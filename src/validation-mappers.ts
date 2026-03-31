@@ -1,3 +1,5 @@
+import { callHookSync } from './hooks.js';
+
 /**
  * Helper to map Zod checks (min, max, regex, etc.) to Mongoose Schema properties.
  */
@@ -46,4 +48,6 @@ export function mapZodChecksToMongoose(checks: any[], mongooseProp: any) {
       }
     }
   }
+
+  callHookSync('validation:mappers', { checks, mongooseProp });
 }

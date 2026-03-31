@@ -39,6 +39,7 @@ Key features:
 - **Isomorphic Support**: Use `setFrontendMode(true)` to allow schemas to be used in frontend environments where Mongoose is not available. Specialized types will automatically fall back to strings/Uint8Arrays while preserving Mongoose metadata for the backend.
 - **Frontend Safe**: The package treats `mongoose` as an optional peer dependency. Core Zod schema definition and metadata helpers (`withMongoose`, `zObjectId`, etc.) are safe to use in the browser without installing `mongoose`.
 - **Nuxt 4 Ready**: Fully compatible with Nuxt 4 and Nitro, supporting best practices like `readValidatedBody` with Zod schemas.
+- **Hookable**: Extensible conversion process using `unjs/hookable`. Developers can hook into any point of the AST walking and metadata extraction.
 
 ### Type Conversion Table
 
@@ -306,6 +307,40 @@ Enable or disable frontend mode.
 Returns a Zod object with timestamp fields.
 - Default fields are `createdAt` and `updatedAt`.
 - Pass `null` to disable a specific field.
+
+---
+
+## Hooks
+
+`mongoose-zod` uses `unjs/hookable` to provide an extensible conversion process. Developers can register hooks to modify the Mongoose definition at any point of the conversion.
+
+### Registering Hooks
+
+```typescript
+import { hooks } from 'mongoose-zod';
+
+// Modify every string field to be uppercase
+hooks.hook('converter:node', (context) => {
+  if (context.type === 'string') {
+    context.mongooseProp.uppercase = true;
+  }
+});
+
+// Add a custom property after any validation mapping
+hooks.hook('validation:mappers', (context) => {
+  context.mongooseProp.customField = 'my-value';
+});
+```
+
+### Available Hooks
+
+- `converter:before`: Called before starting the conversion.
+- `converter:unwrapped`: Called after unwrapping the Zod schema and extracting metadata.
+- `converter:node`: Called for each node (field) being processed.
+- `converter:after`: Called after the conversion of a schema is complete.
+- `registry:add`: Called when metadata is added via `withMongoose`.
+- `validation:mappers`: Called after mapping Zod checks (min, max, etc.) to Mongoose options.
+- `schema:object:field`: Called for each field in a `z.object()` during conversion.
 
 ---
 

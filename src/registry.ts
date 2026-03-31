@@ -1,17 +1,15 @@
 import {z} from 'zod/v4';
-import type {SchemaOptions, SchemaTypeOptions} from 'mongoose';
+import {callHookSync} from './hooks.js';
+
 /**
  * DEFINE THE METADATA SHAPE
  * This interface represents all the Mongoose-specific options you want to
  * support, including custom application flags.
- * We extend both SchemaTypeOptions for field-level properties and SchemaOptions
- * for top-level schema properties, allowing withMongoose to be used on any Zod schema.
+ * We use a more permissive base to avoid recursive type checking issues with
+ * complex Mongoose types in the registry and hooks.
  */
-export interface MongooseMeta extends SchemaTypeOptions<any>, SchemaOptions {
+export interface MongooseMeta extends Record<string, any> {
   explicitId?: boolean;
-
-  // Allow any other custom properties
-  [key: string]: any;
 }
 
 /**
@@ -25,7 +23,8 @@ export const mongooseRegistry = z.registry<MongooseMeta>();
  */
 export function withMongoose<T extends z.ZodTypeAny>(schema: T, meta: MongooseMeta): T {
   const existing = mongooseRegistry.get(schema) || {};
-  // @ts-expect-error - TS sometimes struggles with complex Mongoose types in Registry
-  mongooseRegistry.add(schema, {...existing, ...meta});
+  const merged = {...existing, ...meta};
+  mongooseRegistry.add(schema, merged);
+  callHookSync('registry:add', {schema, meta: merged});
   return schema;
 }

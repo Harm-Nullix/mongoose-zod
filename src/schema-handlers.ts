@@ -2,6 +2,7 @@ import {z} from 'zod/v4';
 import {mongooseRegistry} from './registry.js';
 import {unwrapZodSchema} from './zod-helpers.js';
 import {getMongoose} from './config.js';
+import {callHookSync} from './hooks.js';
 
 /**
  * Handles ZodObject conversion to Mongoose Schema definition.
@@ -31,6 +32,7 @@ export function handleObject(
       if (idMeta.includeId !== true && unwrappedIdMeta.includeId !== true) continue;
     }
     objDef[key] = extractMongooseDef(shape[key], visited);
+    callHookSync('schema:object:field', {key, schema: shape[key], objDef, visited});
   }
 
   // If the developer didn't provide a strict Mongoose type override, return the shape

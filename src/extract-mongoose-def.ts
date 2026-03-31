@@ -4,6 +4,7 @@ import {unwrapZodSchema} from './zod-helpers.js';
 import {mongooseRegistry} from './registry.js';
 import {mapZodChecksToMongoose} from './validation-mappers.js';
 import {handleObject, handleArray, handleRecord} from './schema-handlers.js';
+import {callHookSync} from './hooks.js';
 
 /**
  * Type-level mapping from Zod to Mongoose Schema Definitions
@@ -37,6 +38,11 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
   schema: T,
   visited: Map<z.ZodTypeAny, any> = new Map(),
 ): ToMongooseType<T> & Record<string, any> {
+  // Only call converter:before at the very beginning of a run
+  if (visited.size === 0) {
+    callHookSync('converter:before', {schema: schema as z.ZodTypeAny, visited});
+  }
+
   const {schema: unwrapped, features} = unwrapZodSchema(schema);
 
   // Pull any explicitly registered Mongoose metadata
@@ -56,6 +62,14 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
     }
   }
   const mongooseProp: any = currentMeta;
+
+  callHookSync('converter:unwrapped', {
+    schema: schema as z.ZodTypeAny,
+    unwrapped,
+    features,
+    meta: currentMeta,
+    mongooseProp: mongooseProp as any,
+  });
 
   if (features.isOptional === true && mongooseProp.type && mongooseProp.required !== true) {
     mongooseProp.required = false;
@@ -85,12 +99,29 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
   mapZodChecksToMongoose(features.checks, mongooseProp);
 
   const def = (unwrapped as any)._def;
-  if (!def) return mongooseProp;
+  if (!def) {
+    callHookSync('converter:after', {
+      schema: schema as z.ZodTypeAny,
+      mongooseProp,
+    });
+    return mongooseProp;
+  }
   const {type} = def;
+
+  callHookSync('converter:node', {
+    schema: unwrapped,
+    mongooseProp,
+    type,
+  });
 
   // Handle recursion and specific types via separate handlers
   if (type === 'object') {
-    return handleObject(unwrapped as any, mongooseProp, visited, extractMongooseDef as any);
+    const result = handleObject(unwrapped as any, mongooseProp, visited, extractMongooseDef as any);
+    callHookSync('converter:after', {
+      schema: schema as z.ZodTypeAny,
+      mongooseProp: result,
+    });
+    return result;
   }
 
   if (type === 'array' || type === 'set' || type === 'tuple') {
@@ -195,6 +226,11 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
   if (!mongooseProp.type && type !== 'object') {
     mongooseProp.type = getMongoose()?.Schema.Types.Mixed || 'Mixed';
   }
+
+  callHookSync('converter:after', {
+    schema: schema as z.ZodTypeAny,
+    mongooseProp,
+  });
 
   return mongooseProp;
 }
