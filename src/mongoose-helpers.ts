@@ -1,17 +1,7 @@
 import {z} from 'zod/v4';
 import type mongoose from 'mongoose';
 import {withMongoose, MongooseMeta} from './registry.js';
-import {getFrontendMode} from './config.js';
-
-// Helper to get mongoose types safely without top-level import
-const getMongooseTypes = () => {
-  try {
-    // eslint-disable-next-line global-require
-    return require('mongoose');
-  } catch {
-    return null;
-  }
-};
+import {getFrontendMode, getMongoose} from './config.js';
 
 type StringLiteral<T> = T extends string ? (string extends T ? never : T) : never;
 
@@ -29,7 +19,7 @@ export const zObjectId = (options?: MongooseMeta) => {
     );
   }
 
-  const mongoose = getMongooseTypes();
+  const mongoose = getMongoose();
 
   return withMongoose(
     z.preprocess(
@@ -55,7 +45,7 @@ export const zBuffer = (options?: MongooseMeta) => {
     });
   }
 
-  const mongoose = getMongooseTypes();
+  const mongoose = getMongoose();
 
   return withMongoose(
     z.custom<Buffer>((val) => (mongoose && val instanceof Buffer) || val instanceof Uint8Array),
@@ -73,7 +63,7 @@ export const zPopulated = <T extends z.ZodTypeAny>(
 ) => {
   const isFrontend = getFrontendMode();
 
-  const mongoose = getMongooseTypes();
+  const mongoose = getMongoose();
 
   const objectIdSchema = isFrontend
     ? z.string().regex(/^[\dA-Fa-f]{24}$/, 'Invalid ObjectId')
@@ -126,6 +116,19 @@ export const genTimestampsSchema = <CrAt = 'createdAt', UpAt = 'updatedAt'>(
   (schemaWithMeta as any).meta = () => meta;
 
   return schemaWithMeta;
+};
+
+/**
+ * Utility type to extract the populated object type from a Zod schema field
+ * that uses `zPopulated`. It excludes string and ObjectId from the union,
+ * assuming the field is already populated.
+ */
+export type PopulatedSchema<T, K extends keyof T> = Omit<T, K> & {
+  [P in K]: T[P] extends Array<infer U>
+    ? Array<Exclude<U, string | mongoose.Types.ObjectId>>
+    : Exclude<T[P], string | mongoose.Types.ObjectId>;
+} & {
+  _id?: any;
 };
 
 export const bufferMongooseGetter = (value: unknown) =>

@@ -1,6 +1,5 @@
 import {z} from 'zod/v4';
-import {zObjectId, zPopulated} from 'mongoose-zod';
-import type mongoose from 'mongoose';
+import {zObjectId, zPopulated, type PopulatedSchema} from 'mongoose-zod';
 
 export const UserZodSchema = z
   .object({
@@ -45,16 +44,5 @@ export const PostInputSchema = PostZodSchema.omit({
 
 export type PostInput = z.infer<typeof PostInputSchema>;
 
-/**
- * Enhanced Populated helper that works with Mongoose's return types.
- * It extracts the non-string/non-ObjectId part of the union from zPopulated.
- * This is useful when you've called .populate() in Mongoose.
- */
-export type PopulatedMongoose<T, K extends keyof T> = Omit<T, K> & {
-  [P in K]: T[P] extends Array<infer U>
-    ? Array<Exclude<U, string | mongoose.Types.ObjectId>>
-    : Exclude<T[P], string | mongoose.Types.ObjectId>;
-} & {_id: any};
-
 // Use the Populated helper to define PopulatedPost
-export type PopulatedPost = PopulatedMongoose<Post, 'author' | 'mentions'>;
+export type PopulatedPost = PopulatedSchema<Post, 'author' | 'mentions'>;

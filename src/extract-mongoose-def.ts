@@ -1,0 +1,200 @@
+import {z} from 'zod/v4';
+import {getMongoose} from './config.js';
+import {unwrapZodSchema} from './zod-helpers.js';
+import {mongooseRegistry} from './registry.js';
+import {mapZodChecksToMongoose} from './validation-mappers.js';
+import {handleObject, handleArray, handleRecord} from './schema-handlers.js';
+
+/**
+ * Type-level mapping from Zod to Mongoose Schema Definitions
+ */
+export type ToMongooseType<T extends z.ZodTypeAny> =
+  T extends z.ZodObject<infer Shape>
+    ? {[K in keyof Shape]: Shape[K] extends z.ZodTypeAny ? ToMongooseType<Shape[K]> : any}
+    : T extends z.ZodArray<infer Element>
+      ? Element extends z.ZodTypeAny
+        ? Array<ToMongooseType<Element>> | {type: Array<any>; [key: string]: any}
+        : Array<any>
+      : T extends z.ZodOptional<infer Inner>
+        ? Inner extends z.ZodTypeAny
+          ? ToMongooseType<Inner>
+          : any
+        : T extends z.ZodDefault<infer Inner>
+          ? Inner extends z.ZodTypeAny
+            ? ToMongooseType<Inner>
+            : any
+          : T extends z.ZodNullable<infer Inner>
+            ? Inner extends z.ZodTypeAny
+              ? ToMongooseType<Inner>
+              : any
+            : any;
+
+/**
+ * THE CONVERTER (Safe AST Walker)
+ * We extract the Zod type and merge it with any registered Mongoose metadata.
+ */
+export function extractMongooseDef<T extends z.ZodTypeAny>(
+  schema: T,
+  visited: Map<z.ZodTypeAny, any> = new Map(),
+): ToMongooseType<T> & Record<string, any> {
+  const {schema: unwrapped, features} = unwrapZodSchema(schema);
+
+  // Pull any explicitly registered Mongoose metadata
+  const meta = mongooseRegistry.get(schema) || {};
+  const unwrappedMeta = mongooseRegistry.get(unwrapped) || {};
+
+  // If we have a chain of wrappers, collect metadata from all of them.
+  let currentMeta = {...unwrappedMeta, ...meta};
+  if ((schema as any)._def.innerType) {
+    let inner = (schema as any)._def.innerType;
+    while (inner) {
+      const innerMeta = mongooseRegistry.get(inner);
+      if (innerMeta) {
+        currentMeta = {...innerMeta, ...currentMeta};
+      }
+      inner = inner._def?.innerType || inner._def?.schema;
+    }
+  }
+  const mongooseProp: any = currentMeta;
+
+  if (features.isOptional === true && mongooseProp.type && mongooseProp.required !== true) {
+    mongooseProp.required = false;
+  }
+
+  if (visited.has(unwrapped)) {
+    const existing = visited.get(unwrapped);
+    if (Object.keys(meta).length > 0) {
+      Object.assign(existing, mongooseProp);
+    }
+    return existing as any;
+  }
+
+  visited.set(unwrapped, mongooseProp);
+
+  if (features.default !== undefined) {
+    mongooseProp.default = features.default;
+  }
+  if (features.required === false) {
+    mongooseProp.required = false;
+  }
+  if (features.readOnly === true) {
+    mongooseProp.readOnly = true;
+  }
+
+  // Map Zod checks to Mongoose options
+  mapZodChecksToMongoose(features.checks, mongooseProp);
+
+  const def = (unwrapped as any)._def;
+  if (!def) return mongooseProp;
+  const {type} = def;
+
+  // Handle recursion and specific types via separate handlers
+  if (type === 'object') {
+    return handleObject(unwrapped as any, mongooseProp, visited, extractMongooseDef as any);
+  }
+
+  if (type === 'array' || type === 'set' || type === 'tuple') {
+    handleArray(unwrapped as any, mongooseProp, visited, extractMongooseDef as any);
+  }
+
+  if (type === 'record' || type === 'map') {
+    handleRecord(unwrapped as any, mongooseProp, visited, extractMongooseDef as any);
+  }
+
+  // Handle Intersections
+  if (type === 'intersection') {
+    const left = extractMongooseDef((unwrapped as any)._def.left, visited);
+    const right = extractMongooseDef((unwrapped as any)._def.right, visited);
+
+    if (typeof left === 'object' && typeof right === 'object') {
+      Object.assign(mongooseProp, left, right);
+    } else if (!mongooseProp.type) {
+      mongooseProp.type = getMongoose()?.Schema.Types.Mixed || 'Mixed';
+    }
+  }
+
+  // Handle Unions
+  if (
+    (type === 'union' ||
+      type === 'discriminatedunion' ||
+      type === 'discriminated_union' ||
+      type === 'literal') &&
+    !mongooseProp.type
+  ) {
+    mongooseProp.type = getMongoose()?.Schema.Types.Mixed || 'Mixed';
+  }
+
+  // Handle Primitives
+  switch (type) {
+    case 'string':
+    case 'number':
+    case 'boolean':
+    case 'date':
+    case 'bigint': {
+      if (!mongooseProp.type) {
+        if (type === 'bigint') {
+          mongooseProp.type = typeof BigInt === 'undefined' ? Number : BigInt;
+        } else {
+          const typeMap: Record<string, any> = {
+            string: String,
+            number: Number,
+            boolean: Boolean,
+            date: Date,
+          };
+          mongooseProp.type = typeMap[type];
+        }
+      }
+      if (mongooseProp.required !== false) mongooseProp.required = true;
+      break;
+    }
+    case 'enum':
+    case 'nativeenum':
+    case 'native_enum': {
+      if (!mongooseProp.type) mongooseProp.type = String;
+      mongooseProp.enum =
+        type === 'enum'
+          ? (unwrapped as any).options || def.values
+          : Object.values((unwrapped as any).enum || def.values);
+      if (mongooseProp.required !== false) mongooseProp.required = true;
+      break;
+    }
+    default:
+    // Do nothing
+  }
+
+  // Handle Specialized Types (Buffer, ObjectId)
+  const mongooseInstance = getMongoose();
+  if (type === 'any' || type === 'unknown' || type === 'custom') {
+    const cls = def.cls || (unwrapped as any).cls;
+    if (cls === Buffer || (typeof Uint8Array !== 'undefined' && cls === Uint8Array)) {
+      if (!mongooseProp.type) mongooseProp.type = mongooseInstance?.Schema.Types.Buffer || 'Buffer';
+    } else if (
+      (cls?.name === 'ObjectId' || (mongooseInstance && cls === mongooseInstance.Types.ObjectId)) &&
+      !mongooseProp.type
+    ) {
+      mongooseProp.type = mongooseInstance?.Schema.Types.ObjectId || 'ObjectId';
+    }
+  }
+
+  // Handle Lazy (Recursion Support)
+  if (type === 'lazy') {
+    const inner = def.getter();
+    const result = extractMongooseDef(inner, visited);
+    if (Object.keys(meta).length > 0 && result !== mongooseProp) {
+      if (typeof result === 'object' && !Array.isArray(result)) {
+        Object.assign(mongooseProp, result);
+      } else {
+        mongooseProp.type = (result as any).type || result;
+      }
+      return mongooseProp as any;
+    }
+    return result as any;
+  }
+
+  // Fallback for z.any() or unhandled types
+  if (!mongooseProp.type && type !== 'object') {
+    mongooseProp.type = getMongoose()?.Schema.Types.Mixed || 'Mixed';
+  }
+
+  return mongooseProp;
+}

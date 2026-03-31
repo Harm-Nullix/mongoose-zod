@@ -113,7 +113,7 @@ features = { required: true }, visited = new Set()) {
     return { schema, features };
 }
 
-// Helper to get mongoose types safely without top-level import
+// Helper to get mongoose instance safely
 const getMongoose = () => {
     try {
         // eslint-disable-next-line global-require
@@ -131,18 +131,177 @@ const getMongoose = () => {
         return null;
     }
 };
+let isFrontend = false;
+/**
+ * Enable or disable frontend mode.
+ * In frontend mode, specialized types like ObjectId and Buffer fall back to
+ * simpler representations (strings/arrays) and do not depend on Mongoose.
+ */
+const setFrontendMode = (enabled) => {
+    isFrontend = enabled;
+};
+const getFrontendMode = () => {
+    // Try to auto-detect if not explicitly set
+    // This is a simple heuristic: check for window/document
+    if (isFrontend === undefined || isFrontend === null) {
+        return globalThis.window !== undefined && globalThis.document !== undefined;
+    }
+    return isFrontend;
+};
+
+/**
+ * Helper to map Zod checks (min, max, regex, etc.) to Mongoose Schema properties.
+ */
+function mapZodChecksToMongoose(checks, mongooseProp) {
+    if (!checks || !Array.isArray(checks))
+        return;
+    for (const check of checks) {
+        const traitSet = check._zod?.traits;
+        const checkDef = check._zod?.def;
+        if (!traitSet || !checkDef)
+            continue;
+        // String Lengths
+        if (traitSet.has('$ZodCheckMinLength')) {
+            mongooseProp.minlength = checkDef.minimum;
+        }
+        if (traitSet.has('$ZodCheckMaxLength')) {
+            mongooseProp.maxlength = checkDef.maximum;
+        }
+        if (traitSet.has('$ZodCheckLengthEquals')) {
+            mongooseProp.minlength = checkDef.length;
+            mongooseProp.maxlength = checkDef.length;
+        }
+        // Numbers and Dates Comparisons
+        if (traitSet.has('$ZodCheckGreaterThan')) {
+            mongooseProp.min = checkDef.value;
+        }
+        if (traitSet.has('$ZodCheckLessThan')) {
+            mongooseProp.max = checkDef.value;
+        }
+        // Regex / Match
+        if (traitSet.has('$ZodCheckRegex')) {
+            mongooseProp.match = checkDef.pattern;
+        }
+        // String Transforms (trim, lowercase, uppercase)
+        if (traitSet.has('$ZodCheckOverwrite') && typeof checkDef.tx === 'function') {
+            const txStr = checkDef.tx.toString();
+            if (txStr.includes('.trim()')) {
+                mongooseProp.trim = true;
+            }
+            else if (txStr.includes('.toLowerCase()')) {
+                mongooseProp.lowercase = true;
+            }
+            else if (txStr.includes('.toUpperCase()')) {
+                mongooseProp.uppercase = true;
+            }
+        }
+    }
+}
+
+/**
+ * Handles ZodObject conversion to Mongoose Schema definition.
+ */
+function handleObject(unwrapped, mongooseProp, visited, extractMongooseDef) {
+    const { shape } = unwrapped;
+    const objDef = {};
+    // We must ensure recursive calls see the current object to break cycles.
+    const placeholder = mongooseProp.type ? mongooseProp : objDef;
+    visited.set(unwrapped, placeholder);
+    // eslint-disable-next-line no-restricted-syntax
+    for (const key in shape) {
+        if (!Object.prototype.hasOwnProperty.call(shape, key))
+            continue;
+        // Skip automatic _id mapping unless explicitly requested
+        if (key === '_id') {
+            const idMeta = mongooseRegistry.get(shape[key]) || {};
+            const unwrappedId = unwrapZodSchema(shape[key]).schema;
+            const unwrappedIdMeta = mongooseRegistry.get(unwrappedId) || {};
+            if (idMeta.includeId !== true && unwrappedIdMeta.includeId !== true)
+                continue;
+        }
+        objDef[key] = extractMongooseDef(shape[key], visited);
+    }
+    // If the developer didn't provide a strict Mongoose type override, return the shape
+    if (!mongooseProp.type) {
+        Object.assign(mongooseProp, objDef);
+        const topLevelOptions = new Set([
+            'collection',
+            'versionKey',
+            'timestamps',
+            'discriminatorKey',
+            'strict',
+            'id',
+            '_id',
+            'minimize',
+            'validateBeforeSave',
+        ]);
+        const hasFieldMetadata = Object.keys(mongooseProp).some((k) => {
+            if (Object.prototype.hasOwnProperty.call(objDef, k))
+                return false;
+            if (topLevelOptions.has(k))
+                return false;
+            if (k === 'required' && mongooseProp[k] === false)
+                return false;
+            return true;
+        });
+        return hasFieldMetadata ? mongooseProp : objDef;
+    }
+    // If there is a type override, merge the object definition into the result
+    Object.assign(mongooseProp, objDef);
+    return mongooseProp;
+}
+/**
+ * Handles ZodArray, ZodSet, and ZodTuple conversion.
+ */
+function handleArray(unwrapped, mongooseProp, visited, extractMongooseDef) {
+    const element = unwrapped.element ||
+        unwrapped._def.valueType ||
+        unwrapped._def.rest ||
+        unwrapped._def.items?.[0];
+    const mongoose = getMongoose();
+    const innerDef = element
+        ? extractMongooseDef(element, visited)
+        : mongoose?.Schema.Types.Mixed || 'Mixed';
+    // If no explicit type override, wrap the inner definition in an array
+    if (!mongooseProp.type) {
+        const innerType = innerDef.type || innerDef;
+        mongooseProp.type = [innerType];
+        // Transfer any metadata from the inner type (like 'ref') to the array definition
+        if (typeof innerDef === 'object') {
+            Object.assign(mongooseProp, innerDef);
+            mongooseProp.type = [innerType]; // Restore type as array
+        }
+    }
+}
+/**
+ * Handles ZodRecord and ZodMap conversion.
+ */
+function handleRecord(unwrapped, mongooseProp, visited, extractMongooseDef) {
+    const valueType = unwrapped.valueType ||
+        unwrapped.valueSchema ||
+        unwrapped._def.valueType ||
+        unwrapped._def.valueSchema ||
+        unwrapped._def.innerType; // For some Zod versions
+    if (!mongooseProp.type || mongooseProp.type === Map) {
+        mongooseProp.type = Map;
+        const finalValueType = valueType || unwrapped.valueSchema || unwrapped._def?.valueSchema;
+        if (finalValueType) {
+            const innerDef = extractMongooseDef(finalValueType, visited);
+            mongooseProp.of = innerDef.type || innerDef;
+        }
+    }
+}
+
 /**
  * THE CONVERTER (Safe AST Walker)
  * We extract the Zod type and merge it with any registered Mongoose metadata.
  */
 function extractMongooseDef(schema, visited = new Map()) {
     const { schema: unwrapped, features } = unwrapZodSchema(schema);
-    // Pull any explicitly registered Mongoose metadata for the ORIGINAL schema instance
-    // or any intermediate schemas if it's a chain of effects.
+    // Pull any explicitly registered Mongoose metadata
     const meta = mongooseRegistry.get(schema) || {};
     const unwrappedMeta = mongooseRegistry.get(unwrapped) || {};
-    // If we have a chain of wrappers (e.g. zObjectId().optional()), we should collect
-    // metadata from all of them.
+    // If we have a chain of wrappers, collect metadata from all of them.
     let currentMeta = { ...unwrappedMeta, ...meta };
     if (schema._def.innerType) {
         let inner = schema._def.innerType;
@@ -156,8 +315,6 @@ function extractMongooseDef(schema, visited = new Map()) {
     }
     const mongooseProp = currentMeta;
     if (features.isOptional === true && mongooseProp.type && mongooseProp.required !== true) {
-        // If it was explicitly marked as optional in Zod, and it's a leaf node (has a type),
-        // we respect that by setting required: false, unless the user explicitly forced required: true in meta.
         mongooseProp.required = false;
     }
     if (visited.has(unwrapped)) {
@@ -167,8 +324,6 @@ function extractMongooseDef(schema, visited = new Map()) {
         }
         return existing;
     }
-    // We must ensure recursive calls see the current object to break cycles.
-    // We use mongooseProp for now, and if it's an object/array, we'll fill it.
     visited.set(unwrapped, mongooseProp);
     if (features.default !== undefined) {
         mongooseProp.default = features.default;
@@ -180,140 +335,20 @@ function extractMongooseDef(schema, visited = new Map()) {
         mongooseProp.readOnly = true;
     }
     // Map Zod checks to Mongoose options
-    if (features.checks && Array.isArray(features.checks)) {
-        for (const check of features.checks) {
-            const traitSet = check._zod?.traits;
-            const checkDef = check._zod?.def;
-            if (!traitSet || !checkDef)
-                continue;
-            // String Lengths
-            if (traitSet.has('$ZodCheckMinLength')) {
-                mongooseProp.minlength = checkDef.minimum;
-            }
-            if (traitSet.has('$ZodCheckMaxLength')) {
-                mongooseProp.maxlength = checkDef.maximum;
-            }
-            if (traitSet.has('$ZodCheckLengthEquals')) {
-                mongooseProp.minlength = checkDef.length;
-                mongooseProp.maxlength = checkDef.length;
-            }
-            // Numbers and Dates Comparisons
-            if (traitSet.has('$ZodCheckGreaterThan')) {
-                mongooseProp.min = checkDef.value;
-            }
-            if (traitSet.has('$ZodCheckLessThan')) {
-                mongooseProp.max = checkDef.value;
-            }
-            // Regex / Match
-            if (traitSet.has('$ZodCheckRegex')) {
-                mongooseProp.match = checkDef.pattern;
-            }
-            // String Transforms (trim, lowercase, uppercase)
-            if (traitSet.has('$ZodCheckOverwrite') && typeof checkDef.tx === 'function') {
-                const txStr = checkDef.tx.toString();
-                if (txStr.includes('.trim()')) {
-                    mongooseProp.trim = true;
-                }
-                else if (txStr.includes('.toLowerCase()')) {
-                    mongooseProp.lowercase = true;
-                }
-                else if (txStr.includes('.toUpperCase()')) {
-                    mongooseProp.uppercase = true;
-                }
-            }
-        }
-    }
+    mapZodChecksToMongoose(features.checks, mongooseProp);
     const def = unwrapped._def;
     if (!def)
         return mongooseProp;
     const { type } = def;
-    // 1. Handle Objects (Recursion)
+    // Handle recursion and specific types via separate handlers
     if (type === 'object') {
-        const { shape } = unwrapped;
-        const objDef = {};
-        // We must ensure recursive calls see the current object to break cycles.
-        // If we have a type override, we use mongooseProp, otherwise we use objDef.
-        const placeholder = mongooseProp.type ? mongooseProp : objDef;
-        visited.set(unwrapped, placeholder);
-        // eslint-disable-next-line no-restricted-syntax
-        for (const key in shape) {
-            if (!Object.prototype.hasOwnProperty.call(shape, key))
-                continue;
-            // Skip automatic _id mapping unless explicitly requested
-            if (key === '_id') {
-                const idMeta = mongooseRegistry.get(shape[key]) || {};
-                const unwrappedId = unwrapZodSchema(shape[key]).schema;
-                const unwrappedIdMeta = mongooseRegistry.get(unwrappedId) || {};
-                if (idMeta.includeId !== true && unwrappedIdMeta.includeId !== true)
-                    continue;
-            }
-            objDef[key] = extractMongooseDef(shape[key], visited);
-        }
-        // If the developer didn't provide a strict Mongoose type override, return the shape
-        if (!mongooseProp.type) {
-            Object.assign(mongooseProp, objDef);
-            // If we have any Mongoose-specific metadata besides the shape itself, return mongooseProp.
-            // Otherwise return just the shape (objDef).
-            // We exclude top-level only options from triggering the "metadata" flag for nested paths,
-            // as they should be handled by toMongooseSchema.
-            // We also exclude 'required' if it's explicitly set to false by our unwrap logic for objects.
-            const topLevelOptions = new Set([
-                'collection',
-                'versionKey',
-                'timestamps',
-                'discriminatorKey',
-                'strict',
-                'id',
-                '_id',
-                'minimize',
-                'validateBeforeSave',
-            ]);
-            const hasFieldMetadata = Object.keys(mongooseProp).some((k) => {
-                if (Object.prototype.hasOwnProperty.call(objDef, k))
-                    return false;
-                if (topLevelOptions.has(k))
-                    return false;
-                if (k === 'required' && mongooseProp[k] === false)
-                    return false;
-                return true;
-            });
-            return (hasFieldMetadata ? mongooseProp : objDef);
-        }
-        // If there is a type override, merge the object definition into the result
-        Object.assign(mongooseProp, objDef);
+        return handleObject(unwrapped, mongooseProp, visited, extractMongooseDef);
     }
-    // Handle Arrays, Sets and Tuples
     if (type === 'array' || type === 'set' || type === 'tuple') {
-        const element = unwrapped.element ||
-            unwrapped._def.valueType ||
-            unwrapped._def.rest ||
-            unwrapped._def.items?.[0];
-        const mongoose = getMongoose();
-        const innerDef = element
-            ? extractMongooseDef(element, visited)
-            : mongoose?.Schema.Types.Mixed || 'Mixed';
-        // If no explicit type override, wrap the inner definition in an array
-        if (!mongooseProp.type) {
-            const innerType = innerDef.type || innerDef;
-            // Special case: If innerType is Mixed because of z.any(), we should represent it clearly
-            mongooseProp.type = [innerType];
-            // Transfer any metadata from the inner type (like 'ref') to the array definition
-            if (typeof innerDef === 'object') {
-                Object.assign(mongooseProp, innerDef);
-                mongooseProp.type = [innerType]; // Restore type as array
-            }
-        }
+        handleArray(unwrapped, mongooseProp, visited, extractMongooseDef);
     }
-    // Handle Records and Maps
     if (type === 'record' || type === 'map') {
-        const valueType = unwrapped.valueSchema || unwrapped._def.valueType;
-        if (!mongooseProp.type) {
-            mongooseProp.type = Map;
-            if (valueType) {
-                const innerDef = extractMongooseDef(valueType, visited);
-                mongooseProp.of = innerDef.type || innerDef;
-            }
-        }
+        handleRecord(unwrapped, mongooseProp, visited, extractMongooseDef);
     }
     // Handle Intersections
     if (type === 'intersection') {
@@ -336,59 +371,43 @@ function extractMongooseDef(schema, visited = new Map()) {
     }
     // Handle Primitives
     switch (type) {
-        case 'string': {
-            if (!mongooseProp.type)
-                mongooseProp.type = String;
-            if (mongooseProp.required !== false)
-                mongooseProp.required = true;
-            break;
-        }
-        case 'number': {
-            if (!mongooseProp.type)
-                mongooseProp.type = Number;
-            if (mongooseProp.required !== false)
-                mongooseProp.required = true;
-            break;
-        }
-        case 'boolean': {
-            if (!mongooseProp.type)
-                mongooseProp.type = Boolean;
-            if (mongooseProp.required !== false)
-                mongooseProp.required = true;
-            break;
-        }
-        case 'date': {
-            if (!mongooseProp.type)
-                mongooseProp.type = Date;
-            if (mongooseProp.required !== false)
-                mongooseProp.required = true;
-            break;
-        }
+        case 'string':
+        case 'number':
+        case 'boolean':
+        case 'date':
         case 'bigint': {
             if (!mongooseProp.type) {
-                // Map BigInt to native BigInt if available
-                mongooseProp.type = typeof BigInt === 'undefined' ? Number : BigInt;
+                if (type === 'bigint') {
+                    mongooseProp.type = typeof BigInt === 'undefined' ? Number : BigInt;
+                }
+                else {
+                    const typeMap = {
+                        string: String,
+                        number: Number,
+                        boolean: Boolean,
+                        date: Date,
+                    };
+                    mongooseProp.type = typeMap[type];
+                }
             }
             if (mongooseProp.required !== false)
                 mongooseProp.required = true;
             break;
         }
+        case 'enum':
+        case 'nativeenum':
+        case 'native_enum': {
+            if (!mongooseProp.type)
+                mongooseProp.type = String;
+            mongooseProp.enum =
+                type === 'enum'
+                    ? unwrapped.options || def.values
+                    : Object.values(unwrapped.enum || def.values);
+            if (mongooseProp.required !== false)
+                mongooseProp.required = true;
+            break;
+        }
         // Do nothing
-    }
-    // Handle Enums
-    if (type === 'enum') {
-        if (!mongooseProp.type)
-            mongooseProp.type = String;
-        mongooseProp.enum = unwrapped.options || def.values;
-        if (mongooseProp.required !== false)
-            mongooseProp.required = true;
-    }
-    else if (type === 'nativeenum' || type === 'native_enum') {
-        if (!mongooseProp.type)
-            mongooseProp.type = String;
-        mongooseProp.enum = Object.values(unwrapped.enum || def.values);
-        if (mongooseProp.required !== false)
-            mongooseProp.required = true;
     }
     // Handle Specialized Types (Buffer, ObjectId)
     const mongooseInstance = getMongoose();
@@ -406,9 +425,7 @@ function extractMongooseDef(schema, visited = new Map()) {
     // Handle Lazy (Recursion Support)
     if (type === 'lazy') {
         const inner = def.getter();
-        // Re-call with the inner schema, passing the visited map to break cycles
         const result = extractMongooseDef(inner, visited);
-        // If we have metadata, merge the lazy result into it
         if (Object.keys(meta).length > 0 && result !== mongooseProp) {
             if (typeof result === 'object' && !Array.isArray(result)) {
                 Object.assign(mongooseProp, result);
@@ -426,6 +443,10 @@ function extractMongooseDef(schema, visited = new Map()) {
     }
     return mongooseProp;
 }
+
+/**
+ * Converts a Zod schema to a Mongoose Schema instance.
+ */
 function toMongooseSchema(schema, options) {
     const { schema: unwrapped } = unwrapZodSchema(schema);
     const meta = mongooseRegistry.get(schema) ||
@@ -453,44 +474,11 @@ function toMongooseSchema(schema, options) {
     const definition = extractMongooseDef(schema);
     const mongoose = getMongoose();
     if (!mongoose) {
-        // Last ditch effort: check if it's imported in the global scope
-        const globalMongoose = globalThis.mongoose;
-        if (globalMongoose) {
-            return new globalMongoose.Schema(definition, mergedOptions);
-        }
         throw new Error('Mongoose must be installed to use toMongooseSchema. If you are in an ESM environment, ensure mongoose is loaded.');
     }
     return new mongoose.Schema(definition, mergedOptions);
 }
 
-let isFrontend = false;
-/**
- * Enable or disable frontend mode.
- * In frontend mode, specialized types like ObjectId and Buffer fall back to
- * simpler representations (strings/arrays) and do not depend on Mongoose.
- */
-const setFrontendMode = (enabled) => {
-    isFrontend = enabled;
-};
-const getFrontendMode = () => {
-    // Try to auto-detect if not explicitly set
-    // This is a simple heuristic: check for window/document
-    if (isFrontend === undefined || isFrontend === null) {
-        return globalThis.window !== undefined && globalThis.document !== undefined;
-    }
-    return isFrontend;
-};
-
-// Helper to get mongoose types safely without top-level import
-const getMongooseTypes = () => {
-    try {
-        // eslint-disable-next-line global-require
-        return require('mongoose');
-    }
-    catch {
-        return null;
-    }
-};
 const zObjectId = (options) => {
     if (getFrontendMode()) {
         return withMongoose(v4.z.preprocess((val) => (val === null ? undefined : val), v4.z.string().regex(/^[\dA-Fa-f]{24}$/, 'Invalid ObjectId')), {
@@ -498,7 +486,7 @@ const zObjectId = (options) => {
             ...options,
         });
     }
-    const mongoose = getMongooseTypes();
+    const mongoose = getMongoose();
     return withMongoose(v4.z.preprocess((val) => (val === null ? undefined : val), v4.z.custom((val) => (mongoose && val instanceof mongoose.Types.ObjectId) ||
         (typeof val === 'string' && /^[\dA-Fa-f]{24}$/.test(val)))), {
         type: mongoose?.Schema.Types.ObjectId || 'ObjectId',
@@ -512,7 +500,7 @@ const zBuffer = (options) => {
             ...options,
         });
     }
-    const mongoose = getMongooseTypes();
+    const mongoose = getMongoose();
     return withMongoose(v4.z.custom((val) => (mongoose && val instanceof Buffer) || val instanceof Uint8Array), {
         type: mongoose?.Schema.Types.Buffer || 'Buffer',
         ...options,
@@ -520,7 +508,7 @@ const zBuffer = (options) => {
 };
 const zPopulated = (ref, schema, options) => {
     const isFrontend = getFrontendMode();
-    const mongoose = getMongooseTypes();
+    const mongoose = getMongoose();
     const objectIdSchema = isFrontend
         ? v4.z.string().regex(/^[\dA-Fa-f]{24}$/, 'Invalid ObjectId')
         : v4.z.custom((val) => (mongoose && val instanceof mongoose.Types.ObjectId) ||
@@ -563,6 +551,7 @@ exports.bufferMongooseGetter = bufferMongooseGetter;
 exports.extractMongooseDef = extractMongooseDef;
 exports.genTimestampsSchema = genTimestampsSchema;
 exports.getFrontendMode = getFrontendMode;
+exports.getMongoose = getMongoose;
 exports.mongooseRegistry = mongooseRegistry;
 exports.setFrontendMode = setFrontendMode;
 exports.toMongooseSchema = toMongooseSchema;

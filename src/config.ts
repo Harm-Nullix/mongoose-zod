@@ -1,3 +1,21 @@
+// Helper to get mongoose instance safely
+export const getMongoose = () => {
+  try {
+    // eslint-disable-next-line global-require
+    const m = require('mongoose');
+    if (m && (m.Schema || m.default?.Schema)) {
+      return m.default || m;
+    }
+    return m;
+  } catch {
+    // Try to see if mongoose is globally available (e.g. in some environments)
+    if ((globalThis as any).mongoose) {
+      return (globalThis as any).mongoose;
+    }
+    return null;
+  }
+};
+
 let isFrontend = false;
 
 /**

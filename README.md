@@ -144,12 +144,15 @@ The `genTimestampsSchema` helper simplifies creating Mongoose-compatible Zod sch
 
 ```typescript
 import { z } from 'zod/v4';
-import { toMongooseSchema, genTimestampsSchema } from 'mongoose-zod';
+import { toMongooseSchema, genTimestampsSchema, withMongoose } from 'mongoose-zod';
 
-const userSchema = z.object({
-  name: z.string(),
-})
-.merge(genTimestampsSchema());
+const userSchema = withMongoose(
+  z.object({
+    name: z.string(),
+  })
+  .merge(genTimestampsSchema()),
+  { timestamps: true }
+);
 
 const mongooseSchema = toMongooseSchema(userSchema);
 // Mongoose schema will have { timestamps: true } automatically.
@@ -250,7 +253,27 @@ Converts a Zod schema to a Mongoose schema definition object (the POJO used as t
 Attaches Mongoose-specific metadata to any Zod schema.
 - `metadata`: A `MongooseMeta` object.
 
-`MongooseMeta` extends Mongoose's `SchemaTypeOptions<any>` and `SchemaOptions`, allowing you to specify both field-level options (like `index`, `unique`, `lowercase`) and top-level schema options (like `collection`, `versionKey`, `strict`) via the top-level Zod object.
+`MongooseMeta` extends Mongoose's `SchemaTypeOptions<any>` and `SchemaOptions`, allowing you to specify both field-level options (like `index`, `unique`, `lowercase`) and top-level schema options (like `collection`, `versionKey`, `strict`, `_id`, `id`) via the top-level Zod object.
+
+```typescript
+// Disable _id and id at the schema level
+const LogSchema = withMongoose(
+  z.object({ message: z.string() }),
+  { _id: false, id: false }
+);
+```
+
+### `PopulatedSchema<T, K>`
+TypeScript utility type to extract the populated object type from a `zPopulated` union within a larger type. This is useful for typing Mongoose results after calling `.populate()`.
+
+- `T`: The Zod schema type (e.g., `z.infer<typeof PostSchema>`).
+- `K`: The key(s) to populate.
+
+```typescript
+import { PopulatedSchema } from 'mongoose-zod';
+
+type FullPost = PopulatedSchema<z.infer<typeof PostSchema>, 'author'>;
+```
 
 ### `zObjectId(options?)`
 Helper to create a Zod schema representing a Mongoose `ObjectId`.
