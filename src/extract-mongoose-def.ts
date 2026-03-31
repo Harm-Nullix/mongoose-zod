@@ -42,19 +42,28 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
   if (visited.size === 0) {
     callHookSync('converter:before', {schema: schema as z.ZodTypeAny, visited});
   }
+  callHookSync('converter:start', {schema: schema as z.ZodTypeAny, visited});
 
   const {schema: unwrapped, features} = unwrapZodSchema(schema);
 
   // Pull any explicitly registered Mongoose metadata
+  callHookSync('registry:get:before', {schema: schema as z.ZodTypeAny});
   const meta = mongooseRegistry.get(schema) || {};
+  callHookSync('registry:get', {schema: schema as z.ZodTypeAny, meta});
+
+  callHookSync('registry:get:before', {schema: unwrapped});
   const unwrappedMeta = mongooseRegistry.get(unwrapped) || {};
+  callHookSync('registry:get', {schema: unwrapped, meta: unwrappedMeta});
 
   // If we have a chain of wrappers, collect metadata from all of them.
   let currentMeta = {...unwrappedMeta, ...meta};
   if ((schema as any)._def.innerType) {
     let inner = (schema as any)._def.innerType;
     while (inner) {
+      callHookSync('registry:get:before', {schema: inner});
       const innerMeta = mongooseRegistry.get(inner);
+      callHookSync('registry:get', {schema: inner, meta: innerMeta});
+
       if (innerMeta) {
         currentMeta = {...innerMeta, ...currentMeta};
       }

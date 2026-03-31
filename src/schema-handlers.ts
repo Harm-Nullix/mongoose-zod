@@ -13,6 +13,7 @@ export function handleObject(
   visited: Map<z.ZodTypeAny, any>,
   extractMongooseDef: (schema: z.ZodTypeAny, visited: Map<z.ZodTypeAny, any>) => any,
 ) {
+  callHookSync('schema:object:before', {schema: unwrapped, mongooseProp, visited});
   const {shape} = unwrapped;
   const objDef: any = {};
 
@@ -29,14 +30,31 @@ export function handleObject(
       const idMeta = mongooseRegistry.get(shape[key]) || {};
       const unwrappedId = unwrapZodSchema(shape[key]).schema;
       const unwrappedIdMeta = mongooseRegistry.get(unwrappedId) || {};
-      if (idMeta.includeId !== true && unwrappedIdMeta.includeId !== true) continue;
+      if (
+        idMeta.includeId !== true &&
+        unwrappedIdMeta.includeId !== true &&
+        mongooseProp.includeId !== true
+      ) {
+        continue;
+      }
     }
-    objDef[key] = extractMongooseDef(shape[key], visited);
+    const def = extractMongooseDef(shape[key], visited);
+    if (typeof def === 'object' && def !== null && !Array.isArray(def)) {
+      const {includeId, ...cleanDef} = def;
+      objDef[key] = cleanDef;
+    } else {
+      objDef[key] = def;
+    }
     callHookSync('schema:object:field', {key, schema: shape[key], objDef, visited});
   }
 
   // If the developer didn't provide a strict Mongoose type override, return the shape
-  if (!mongooseProp.type) {
+  let result;
+  if (mongooseProp.type) {
+    // If there is a type override, merge the object definition into the result
+    Object.assign(mongooseProp, objDef);
+    result = mongooseProp;
+  } else {
     Object.assign(mongooseProp, objDef);
 
     const topLevelOptions = new Set([
@@ -58,12 +76,11 @@ export function handleObject(
       return true;
     });
 
-    return hasFieldMetadata ? mongooseProp : objDef;
+    result = hasFieldMetadata ? mongooseProp : objDef;
   }
 
-  // If there is a type override, merge the object definition into the result
-  Object.assign(mongooseProp, objDef);
-  return mongooseProp;
+  callHookSync('schema:object:after', {schema: unwrapped, mongooseProp, objDef, result});
+  return result;
 }
 
 /**
@@ -75,6 +92,7 @@ export function handleArray(
   visited: Map<z.ZodTypeAny, any>,
   extractMongooseDef: (schema: z.ZodTypeAny, visited: Map<z.ZodTypeAny, any>) => any,
 ) {
+  callHookSync('schema:array:before', {schema: unwrapped, mongooseProp, visited});
   const element =
     (unwrapped as any).element ||
     (unwrapped as any)._def.valueType ||
@@ -97,6 +115,7 @@ export function handleArray(
       mongooseProp.type = [innerType]; // Restore type as array
     }
   }
+  callHookSync('schema:array:after', {schema: unwrapped, mongooseProp, innerDef});
 }
 
 /**
@@ -108,18 +127,21 @@ export function handleRecord(
   visited: Map<z.ZodTypeAny, any>,
   extractMongooseDef: (schema: z.ZodTypeAny, visited: Map<z.ZodTypeAny, any>) => any,
 ) {
+  callHookSync('schema:record:before', {schema: unwrapped, mongooseProp, visited});
   const valueType =
     (unwrapped as any).valueType ||
     (unwrapped as any).valueSchema ||
     (unwrapped as any)._def.valueType ||
     (unwrapped as any)._def.valueSchema ||
     (unwrapped as any)._def.innerType; // For some Zod versions
+  let innerDef: any;
   if (!mongooseProp.type || mongooseProp.type === Map) {
     mongooseProp.type = Map;
     const finalValueType = valueType || (unwrapped as any).valueSchema || (unwrapped as any)._def?.valueSchema;
     if (finalValueType) {
-      const innerDef = extractMongooseDef(finalValueType, visited);
+      innerDef = extractMongooseDef(finalValueType, visited);
       mongooseProp.of = (innerDef as any).type || innerDef;
     }
   }
+  callHookSync('schema:record:after', {schema: unwrapped, mongooseProp, innerDef});
 }

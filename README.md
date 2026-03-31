@@ -115,7 +115,48 @@ const zodSchema = z.object({
   age: z.number().optional(),
 });
 
+// Basic conversion
 const mongooseSchema = toMongooseSchema(zodSchema);
+```
+
+### Plugins
+
+You can pass Mongoose plugins directly to `toMongooseSchema`. This is the recommended way to extend your schemas with third-party or custom plugins.
+
+```typescript
+import { z } from 'zod/v4';
+import { toMongooseSchema } from 'zod-mongoose-v4';
+import mongooseLeanVirtuals from 'mongoose-lean-virtuals';
+
+const zodSchema = z.object({
+  title: z.string(),
+});
+
+// Apply plugins during conversion
+const mongooseSchema = toMongooseSchema(zodSchema, {
+  plugins: [mongooseLeanVirtuals]
+});
+
+// The resulting schema now has the plugin applied
+const Post = mongoose.model('Post', mongooseSchema);
+const doc = await Post.findOne().lean({ virtuals: true });
+```
+
+### Hook: `schema:created`
+
+For more advanced extensions, use the `schema:created` hook to modify the `mongoose.Schema` instance immediately after it is created.
+
+```typescript
+import { hooks } from 'zod-mongoose-v4';
+
+hooks.hook('schema:created', ({ schema, zodSchema }) => {
+  // Add a virtual field to all schemas that have a 'title'
+  if ('title' in zodSchema.shape) {
+    schema.virtual('slug').get(function() {
+      return this.title.toLowerCase().replace(/ /g, '-');
+    });
+  }
+});
 ```
 
 ### Adding Mongoose Metadata
@@ -217,6 +258,24 @@ If you need to explicitly define the `_id` field in the Mongoose schema (e.g., t
 const CustomIdSchema = z.object({
   _id: zObjectId({ includeId: true, index: true }),
 });
+```
+
+#### 4. Composite IDs
+Mongoose supports composite IDs (using an object as the `_id`). You can define this in Zod by using an object for the `_id` field and setting `includeId: true` in the metadata of the `_id` field (or the parent object).
+
+```typescript
+const CompositeIdSchema = z.object({
+  pk: z.string(),
+  sk: z.string(),
+});
+
+const UserSchema = z.object({
+  _id: withMongoose(CompositeIdSchema, { includeId: true }),
+  name: z.string(),
+});
+
+const mongooseSchema = toMongooseSchema(UserSchema);
+// Resulting Mongoose schema will have _id: { pk: String, sk: String }
 ```
 
 ### Buffers and ObjectIds
@@ -334,13 +393,26 @@ hooks.hook('validation:mappers', (context) => {
 
 ### Available Hooks
 
+The following hook points are available:
+
 - `converter:before`: Called before starting the conversion.
-- `converter:unwrapped`: Called after unwrapping the Zod schema and extracting metadata.
-- `converter:node`: Called for each node (field) being processed.
-- `converter:after`: Called after the conversion of a schema is complete.
-- `registry:add`: Called when metadata is added via `withMongoose`.
-- `validation:mappers`: Called after mapping Zod checks (min, max, etc.) to Mongoose options.
-- `schema:object:field`: Called for each field in a `z.object()` during conversion.
+- `converter:start`: Called at the start of each `extractMongooseDef` call (recursive).
+- `converter:unwrapped`: Called after unwrapping a Zod schema and extracting metadata.
+- `converter:node`: Called for each Zod type node being processed.
+- `converter:after`: Called after a node's conversion is complete.
+- `schema:object:before`: Called before processing a `z.object()`.
+- `schema:object:field`: Called for each field in a `z.object()`.
+- `schema:object:after`: Called after processing a `z.object()`.
+- `schema:array:before`: Called before processing a `z.array()`, `z.set()`, or `z.tuple()`.
+- `schema:array:after`: Called after processing an array-like type.
+- `schema:record:before`: Called before processing a `z.record()` or `z.map()`.
+- `schema:record:after`: Called after processing a record/map type.
+- `registry:get:before`: Called before retrieving metadata from the registry.
+- `registry:get`: Called when retrieving metadata from the registry.
+- `registry:add`: Called before adding metadata to the registry.
+- `registry:added`: Called after adding metadata to the registry.
+- `validation:mappers`: Called after mapping Zod validations to Mongoose options.
+- `schema:created`: Called after a `mongoose.Schema` instance is created (for `toMongooseSchema`).
 
 ---
 

@@ -100,6 +100,11 @@ export interface MongooseZodHooks {
    * Called after mapping Zod checks to Mongoose options.
    */
   'validation:mappers': (context: { checks: any[]; mongooseProp: any }) => void;
+
+  /**
+   * Called after a Mongoose Schema instance has been created in `toMongooseSchema`.
+   */
+  'schema:created': (context: { schema: z.ZodTypeAny; mongooseSchema: any; options?: any }) => void;
 }
 
 export const hooks = createHooks<MongooseZodHooks>();

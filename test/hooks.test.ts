@@ -87,3 +87,81 @@ describe('Hooks', () => {
     hooks.removeHook('schema:object:field', fieldHook);
   });
 });
+
+describe('New Hooks v0.2.0', () => {
+  it('should call converter:start on every call', () => {
+    const schema = z.object({ name: z.string() });
+    const startHook = vi.fn();
+    hooks.hook('converter:start', startHook);
+    extractMongooseDef(schema);
+    // 1 for object, 1 for string
+    expect(startHook).toHaveBeenCalledTimes(2);
+    hooks.removeHook('converter:start', startHook);
+  });
+
+  it('should call registry:get and registry:added', () => {
+    const schema = z.string();
+    const getHook = vi.fn();
+    const addedHook = vi.fn();
+    hooks.hook('registry:get', getHook);
+    hooks.hook('registry:added', addedHook);
+
+    withMongoose(schema, { unique: true });
+
+    expect(getHook).toHaveBeenCalled();
+    expect(addedHook).toHaveBeenCalledWith(expect.objectContaining({
+      meta: expect.objectContaining({ unique: true })
+    }));
+
+    hooks.removeHook('registry:get', getHook);
+    hooks.removeHook('registry:added', addedHook);
+  });
+
+  it('should call schema object before and after hooks', () => {
+    const schema = z.object({ name: z.string() });
+    const beforeHook = vi.fn();
+    const afterHook = vi.fn();
+    hooks.hook('schema:object:before', beforeHook);
+    hooks.hook('schema:object:after', afterHook);
+
+    extractMongooseDef(schema);
+
+    expect(beforeHook).toHaveBeenCalled();
+    expect(afterHook).toHaveBeenCalled();
+
+    hooks.removeHook('schema:object:before', beforeHook);
+    hooks.removeHook('schema:object:after', afterHook);
+  });
+
+  it('should call schema array before and after hooks', () => {
+    const schema = z.array(z.string());
+    const beforeHook = vi.fn();
+    const afterHook = vi.fn();
+    hooks.hook('schema:array:before', beforeHook);
+    hooks.hook('schema:array:after', afterHook);
+
+    extractMongooseDef(schema);
+
+    expect(beforeHook).toHaveBeenCalled();
+    expect(afterHook).toHaveBeenCalled();
+
+    hooks.removeHook('schema:array:before', beforeHook);
+    hooks.removeHook('schema:array:after', afterHook);
+  });
+
+  it('should call schema record before and after hooks', () => {
+    const schema = z.record(z.string(), z.string());
+    const beforeHook = vi.fn();
+    const afterHook = vi.fn();
+    hooks.hook('schema:record:before', beforeHook);
+    hooks.hook('schema:record:after', afterHook);
+
+    extractMongooseDef(schema);
+
+    expect(beforeHook).toHaveBeenCalled();
+    expect(afterHook).toHaveBeenCalled();
+
+    hooks.removeHook('schema:record:before', beforeHook);
+    hooks.removeHook('schema:record:after', afterHook);
+  });
+});

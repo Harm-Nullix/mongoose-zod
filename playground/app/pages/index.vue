@@ -137,7 +137,8 @@
             <UCard
               v-for="post in posts"
               :key="String(post._id)"
-              class="transition-all hover:ring-2 hover:ring-primary/50"
+              class="transition-all hover:ring-2 hover:ring-primary/50 cursor-pointer"
+              @click="router.push(`/posts/${post._id}`)"
             >
               <template #header>
                 <div class="flex justify-between items-start">
@@ -202,6 +203,8 @@
 <script setup lang="ts">
 import {PostInputSchema, type PopulatedPost, type User} from '#shared/schemas';
 import type {FormSubmitEvent} from '@nuxt/ui';
+
+const router = useRouter();
 
 const state = reactive({
   title: '',

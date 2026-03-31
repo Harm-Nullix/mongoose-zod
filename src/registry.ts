@@ -22,9 +22,13 @@ export const mongooseRegistry = z.registry<MongooseMeta>();
  * A clean wrapper to attach Mongoose metadata to any Zod schema.
  */
 export function withMongoose<T extends z.ZodTypeAny>(schema: T, meta: MongooseMeta): T {
+  callHookSync('registry:get:before', {schema});
   const existing = mongooseRegistry.get(schema) || {};
+  callHookSync('registry:get', {schema, meta: existing});
+
   const merged = {...existing, ...meta};
-  mongooseRegistry.add(schema, merged);
   callHookSync('registry:add', {schema, meta: merged});
+  mongooseRegistry.add(schema, merged);
+  callHookSync('registry:added', {schema, meta: merged});
   return schema;
 }

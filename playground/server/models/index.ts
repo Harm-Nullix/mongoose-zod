@@ -11,7 +11,17 @@ export const UserModel =
   (mongoose.models.User as mongoose.Model<User>) || mongoose.model<User>('User', UserSchema);
 
 // Post Model
-export const PostSchema = toMongooseSchema(PostZodSchema);
+export const PostSchema = toMongooseSchema(PostZodSchema, {
+  plugins: [
+    (schema: mongoose.Schema) => {
+      schema.virtual('isRecent').get(function (this: any) {
+        if (!this.createdAt) return false;
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        return this.createdAt > oneHourAgo;
+      });
+    },
+  ],
+} as any);
 // Apply timestamps handled by Zod Schema
 PostSchema.set('timestamps', true);
 

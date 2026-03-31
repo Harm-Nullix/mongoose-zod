@@ -5,16 +5,21 @@ import {mongooseRegistry} from './registry.js';
 import {unwrapZodSchema} from './zod-helpers.js';
 import {getMongoose} from './config.js';
 import {extractMongooseDef} from './extract-mongoose-def.js';
+import {callHookSync} from './hooks.js';
 
 export {extractMongooseDef} from './extract-mongoose-def.js';
 export type {ToMongooseType} from './extract-mongoose-def.js';
+
+export interface ToMongooseSchemaOptions extends SchemaOptions {
+  plugins?: Array<(schema: mongoose.Schema, options?: any) => void>;
+}
 
 /**
  * Converts a Zod schema to a Mongoose Schema instance.
  */
 export function toMongooseSchema<T extends z.ZodTypeAny>(
   schema: T,
-  options?: SchemaOptions,
+  options?: ToMongooseSchemaOptions,
 ): mongoose.Schema<z.infer<T>> {
   const {schema: unwrapped} = unwrapZodSchema(schema);
   const meta =
@@ -23,6 +28,8 @@ export function toMongooseSchema<T extends z.ZodTypeAny>(
     (schema as any).meta?.() ||
     (unwrapped as any).meta?.() ||
     {};
+
+  const { plugins, ...schemaOptions } = options || {};
 
   const mergedOptions: SchemaOptions = {
     // Also merge other schema options from meta if they exist
@@ -39,10 +46,25 @@ export function toMongooseSchema<T extends z.ZodTypeAny>(
     ...(meta._id === undefined ? {} : {_id: meta._id}),
     ...(meta.timestamps ? {timestamps: meta.timestamps} : {}),
     ...(meta.discriminatorKey ? {discriminatorKey: meta.discriminatorKey} : {}),
-    ...options,
+    ...schemaOptions,
   };
 
-  const definition = extractMongooseDef(schema) as unknown as SchemaDefinition;
+  let definition = extractMongooseDef(schema) as unknown as SchemaDefinition;
+
+  // Strip internal includeId metadata that might have leaked into the definition
+  if (typeof definition === 'object' && definition !== null) {
+    // If it's a top-level object, it might have metadata fields directly
+    const {includeId, ...cleanDefinition} = definition as any;
+    definition = cleanDefinition;
+
+    // Also clean any top-level field definitions
+    for (const value of Object.values(definition)) {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        delete (value as any).includeId;
+      }
+    }
+  }
+
   const mongoose = getMongoose();
 
   if (!mongoose) {
@@ -51,5 +73,21 @@ export function toMongooseSchema<T extends z.ZodTypeAny>(
     );
   }
 
-  return new mongoose.Schema(definition, mergedOptions) as any;
+  const mongooseSchema = new mongoose.Schema(definition, mergedOptions);
+
+  // Apply plugins if provided in options
+  if (plugins && Array.isArray(plugins)) {
+    for (const plugin of plugins) {
+      mongooseSchema.plugin(plugin);
+    }
+  }
+
+  // Call schema:created hook
+  callHookSync('schema:created', {
+    schema,
+    mongooseSchema,
+    options: mergedOptions,
+  });
+
+  return mongooseSchema as any;
 }
