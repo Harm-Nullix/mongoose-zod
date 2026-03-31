@@ -4,7 +4,7 @@
       <div class="flex items-center justify-center gap-3 mb-4">
         <UIcon name="i-heroicons-bolt-20-solid" class="w-10 h-10 text-primary" />
         <h1 class="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-5xl">
-          Mongoose-Zod
+          Zod-Mongoose-V4
         </h1>
       </div>
       <p class="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">

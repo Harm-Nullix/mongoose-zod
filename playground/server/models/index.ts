@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import {toMongooseSchema} from 'mongoose-zod';
+import {toMongooseSchema} from 'zod-mongoose-v4';
 import {UserZodSchema, PostZodSchema, type User, type Post} from '#shared/schemas';
 
 // Expose mongoose globally for the converter to find in ESM/Nitro environments

@@ -1,6 +1,6 @@
-# Mongoose-Zod Playground
+# Zod-Mongoose-V4 Playground
 
-This is a playground for testing and demonstrating `mongoose-zod` with **Nuxt 4**, **Zod v4**, and **Mongoose 8**.
+This is a playground for testing and demonstrating `zod-mongoose-v4` with **Nuxt 4**, **Zod v4**, and **Mongoose 8**.
 
 ## Features
 

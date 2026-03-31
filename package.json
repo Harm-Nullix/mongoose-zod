@@ -1,7 +1,7 @@
 {
-  "version": "0.1.1",
-  "name": "mongoose-zod",
-  "description": "Create Mongoose schemas using Zod.",
+  "version": "0.2.0-rc.1",
+  "name": "zod-mongoose-v4",
+  "description": "Create Mongoose schemas using Zod v4.",
   "scripts": {
     "lint:eslint": "eslint",
     "lint:eslint:fix": "eslint --fix",
@@ -16,13 +16,13 @@
     "release": "bumpp && pnpm publish --access public"
   },
   "packageManager": "pnpm@9.11.0",
-  "homepage": "https://github.com/andreww2012/mongoose-zod",
+  "homepage": "https://github.com/harm-nullix/zod-mongoose-v4",
   "repository": {
     "type": "git",
-    "url": "https://github.com/andreww2012/mongoose-zod"
+    "url": "https://github.com/harm-nullix/zod-mongoose-v4"
   },
   "bugs": {
-    "url": "https://github.com/andreww2012/mongoose-zod/issues/new"
+    "url": "https://github.com/harm-nullix/zod-mongoose-v4/issues/new"
   },
   "keywords": [
     "mongoose",

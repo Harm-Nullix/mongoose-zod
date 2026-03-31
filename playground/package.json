@@ -16,7 +16,7 @@
   "dependencies": {
     "@nuxt/ui": "^4.6.0",
     "mongoose": "^8.23.0",
-    "mongoose-zod": "file:..",
+    "zod-mongoose-v4": "file:..",
     "nuxt": "^4.4.2",
     "tailwindcss": "^4.2.2",
     "vue": "^3.5.31",

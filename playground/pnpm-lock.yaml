@@ -14,9 +14,6 @@ importers:
       mongoose:
         specifier: ^8.23.0
         version: 8.23.0
-      mongoose-zod:
-        specifier: file:..
-        version: file:..(mongoose@8.23.0)(zod@4.3.6)
       nuxt:
         specifier: ^4.4.2
         version: 4.4.2(@babel/core@7.29.0)(@babel/plugin-syntax-jsx@7.28.6(@babel/core@7.29.0))(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@parcel/watcher@2.5.6)(@types/node@24.12.0)(@vue/compiler-sfc@3.5.31)(cac@6.7.14)(db0@0.3.4)(ioredis@5.10.1)(lightningcss@1.32.0)(magicast@0.5.2)(rollup-plugin-visualizer@7.0.1(rollup@4.60.1))(rollup@4.60.1)(terser@5.46.1)(typescript@6.0.2)(vite@7.3.1(@types/node@24.12.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(yaml@2.8.3))(yaml@2.8.3)
@@ -32,6 +29,9 @@ importers:
       zod:
         specifier: ^4.3.6
         version: 4.3.6
+      zod-mongoose-v4:
+        specifier: file:..
+        version: file:..(mongoose@8.23.0)(zod@4.3.6)
     devDependencies:
       '@types/node':
         specifier: ^24.12.0
@@ -3036,16 +3036,6 @@ packages:
       socks:
         optional: true
 
-  mongoose-zod@file:..:
-    resolution: {directory: .., type: directory}
-    engines: {node: '>=24'}
-    peerDependencies:
-      mongoose: ^8.x
-      zod: ^3.25.0 || ^4.0.0
-    peerDependenciesMeta:
-      mongoose:
-        optional: true
-
   mongoose@8.23.0:
     resolution: {integrity: sha512-Bul4Ha6J8IqzFrb0B1xpVzkC3S0sk43dmLSnhFOn8eJlZiLwL5WO6cRymmjaADdCMjUcCpj2ce8hZI6O4ZFSug==}
     engines: {node: '>=16.20.1'}
@@ -4362,6 +4352,16 @@ packages:
   zip-stream@6.0.1:
     resolution: {integrity: sha512-zK7YHHz4ZXpW89AHXUPbQVGKI7uvkd3hzusTdotCg1UxyaVtg0zFJSTfW/Dq5f7OBBVnq6cZIaC8Ti4hb6dtCA==}
     engines: {node: '>= 14'}
+
+  zod-mongoose-v4@file:..:
+    resolution: {directory: .., type: directory}
+    engines: {node: '>=24'}
+    peerDependencies:
+      mongoose: ^8.x
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      mongoose:
+        optional: true
 
   zod@4.3.6:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
@@ -7443,12 +7443,6 @@ snapshots:
       bson: 7.2.0
       mongodb-connection-string-url: 7.0.1
 
-  mongoose-zod@file:..(mongoose@8.23.0)(zod@4.3.6):
-    dependencies:
-      zod: 4.3.6
-    optionalDependencies:
-      mongoose: 8.23.0
-
   mongoose@8.23.0:
     dependencies:
       bson: 6.10.4
@@ -9064,5 +9058,12 @@ snapshots:
       archiver-utils: 5.0.2
       compress-commons: 6.0.2
       readable-stream: 4.7.0
+
+  zod-mongoose-v4@file:..(mongoose@8.23.0)(zod@4.3.6):
+    dependencies:
+      hookable: 6.1.0
+      zod: 4.3.6
+    optionalDependencies:
+      mongoose: 8.23.0
 
   zod@4.3.6: {}

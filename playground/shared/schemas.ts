@@ -1,5 +1,5 @@
 import {z} from 'zod/v4';
-import {zObjectId, zPopulated, type PopulatedSchema} from 'mongoose-zod';
+import {zObjectId, zPopulated, type PopulatedSchema} from 'zod-mongoose-v4';
 
 export const UserZodSchema = z
   .object({
