@@ -20,7 +20,7 @@ describe('Zod Union to Mongoose Union', () => {
     expect(valuePath.options.of[1]).toBe(Number);
   });
 
-  test('should map complex union to Schema.Types.Mixed', () => {
+  test('should map complex union to its constituent fields', () => {
     const schema = z.object({
       activity: z.discriminatedUnion('type', [
         z.object({ type: z.literal('run'), distance: z.number() }),
@@ -29,9 +29,18 @@ describe('Zod Union to Mongoose Union', () => {
     });
 
     const mongooseSchema = toMongooseSchema(schema);
-    const activityPath = mongooseSchema.path('activity') as any;
+    const typePath = mongooseSchema.path('activity.type') as any;
+    const distancePath = mongooseSchema.path('activity.distance') as any;
+    const lapsPath = mongooseSchema.path('activity.laps') as any;
 
-    expect(activityPath.instance).toBe('Mixed');
+    expect(typePath.instance).toBe('Mixed');
+    expect(distancePath.instance).toBe('Number');
+    expect(lapsPath.instance).toBe('Number');
+    
+    // Ensure all union members are optional in the final schema
+    expect(typePath.options.required).toBe(false);
+    expect(distancePath.options.required).toBe(false);
+    expect(lapsPath.options.required).toBe(false);
   });
 
   test('should correctly validate data against Mongoose Union', async () => {

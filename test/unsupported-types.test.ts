@@ -23,13 +23,16 @@ describe('Improved Types behavior', () => {
     expect(def.of[1]).toBe(Number);
   });
 
-  test('z.discriminatedUnion should currently fallback to Mixed', () => {
+  test('z.discriminatedUnion should merge object definitions', () => {
     const schema = z.discriminatedUnion('type', [
       z.object({ type: z.literal('a'), a: z.string() }),
       z.object({ type: z.literal('b'), b: z.number() }),
     ]);
     const def = extractMongooseDef(schema) as any;
-    expect(def.type).toBe(mongoose.Schema.Types.Mixed);
+    // def itself is the mongooseProp, which has the merged fields
+    expect(def.a.type).toBe(String);
+    expect(def.b.type).toBe(Number);
+    expect(def.type.type).toBe(mongoose.Schema.Types.Mixed); // The 'type' field is literal -> Mixed
   });
 
   test('z.record should map to Mongoose Map', () => {
