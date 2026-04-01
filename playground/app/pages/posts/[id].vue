@@ -19,7 +19,9 @@
     <div v-else-if="error || !post" class="text-center py-20">
       <UIcon name="i-heroicons-exclamation-triangle" class="w-16 h-16 text-red-500 mx-auto mb-4" />
       <h2 class="text-2xl font-bold">Post not found</h2>
-      <p class="text-gray-500 mt-2">The post you are looking for does not exist or has been deleted.</p>
+      <p class="text-gray-500 mt-2">
+        The post you are looking for does not exist or has been deleted.
+      </p>
     </div>
 
     <div v-else class="space-y-8">
@@ -31,14 +33,20 @@
                 {{ post.title }}
               </h1>
               <div class="flex items-center gap-2 mt-2 text-gray-500">
-                <UAvatar
-                  :alt="post.author?.username"
-                  size="xs"
-                  :ui="{ root: 'rounded-full' }"
-                />
-                <span class="font-medium text-primary">@{{ post.author?.username || 'unknown' }}</span>
+                <UAvatar :alt="post.author?.username" size="xs" :ui="{root: 'rounded-full'}" />
+                <span class="font-medium text-primary"
+                  >@{{ post.author?.username || 'unknown' }}</span
+                >
                 <span>•</span>
-                <span>{{ post.createdAt ? new Date(post.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : 'recently' }}</span>
+                <span>{{
+                  post.createdAt
+                    ? new Date(post.createdAt).toLocaleDateString(undefined, {
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })
+                    : 'recently'
+                }}</span>
               </div>
             </div>
             <div class="flex gap-2">
@@ -68,7 +76,9 @@
 
         <template v-if="post.mentions && post.mentions.length > 0" #footer>
           <div class="flex items-center gap-3">
-            <span class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Tagged Users:</span>
+            <span class="text-sm font-semibold text-gray-400 uppercase tracking-wider"
+              >Tagged Users:</span
+            >
             <div class="flex flex-wrap gap-2">
               <UBadge
                 v-for="m in post.mentions"
@@ -85,26 +95,30 @@
       </UCard>
 
       <!-- Edit Modal -->
-      <UModal v-model="isEditing">
-        <UCard :ui="{ body: 'py-4' }">
-          <template #header>
-            <div class="flex items-center justify-between">
-              <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
-                Edit Post
-              </h3>
-              <UButton
-                color="neutral"
-                variant="ghost"
-                icon="i-heroicons-x-mark-20-solid"
-                class="-my-1"
-                @click="isEditing = false"
-              />
-            </div>
-          </template>
-
-          <UForm :schema="PostInputSchema.partial()" :state="editState" class="space-y-4 py-4" @submit="onUpdate">
+      <UModal v-model:open="isEditing">
+        <template #header>
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
+              Edit Post
+            </h3>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              icon="i-heroicons-x-mark-20-solid"
+              class="-my-1"
+              @click="isEditing = false"
+            />
+          </div>
+        </template>
+        <template #body>
+          <UForm
+            :schema="PostInputSchema.partial()"
+            :state="editState"
+            class="space-y-4 py-4"
+            @submit="onUpdate"
+          >
             <UFormField label="Title" name="title">
-              <UInput v-model="editState.title" icon="i-heroicons-type-specimen" />
+              <UInput v-model="editState.title" icon="i-heroicons-h1" />
             </UFormField>
 
             <UFormField label="Content" name="content">
@@ -124,21 +138,11 @@
             </UFormField>
 
             <div class="flex justify-end gap-3 mt-6">
-              <UButton
-                label="Cancel"
-                color="neutral"
-                variant="ghost"
-                @click="isEditing = false"
-              />
-              <UButton
-                type="submit"
-                label="Save Changes"
-                color="primary"
-                :loading="updating"
-              />
+              <UButton label="Cancel" color="neutral" variant="ghost" @click="isEditing = false" />
+              <UButton type="submit" label="Save Changes" color="primary" :loading="updating" />
             </div>
           </UForm>
-        </UCard>
+        </template>
       </UModal>
     </div>
   </UContainer>
@@ -160,17 +164,21 @@ const updating = ref(false);
 const editState = reactive({
   title: post.value?.title || '',
   content: post.value?.content || '',
-  mentions: post.value?.mentions?.map(m => String(m._id)) || [] as string[],
+  mentions: post.value?.mentions?.map((m) => String(m._id)) || ([] as string[]),
 });
 
 // Sync editState when post data loads
-watch(post, (newPost) => {
-  if (newPost) {
-    editState.title = newPost.title;
-    editState.content = newPost.content;
-    editState.mentions = newPost.mentions?.map(m => String(m._id)) || [];
-  }
-}, {immediate: true});
+watch(
+  post,
+  (newPost) => {
+    if (newPost) {
+      editState.title = newPost.title;
+      editState.content = newPost.content;
+      editState.mentions = newPost.mentions?.map((m) => String(m._id)) || [];
+    }
+  },
+  {immediate: true},
+);
 
 // Fetch users for mentions
 const {data: users} = await useFetch<User[]>('/api/users', {

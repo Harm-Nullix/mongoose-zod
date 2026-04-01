@@ -3,17 +3,22 @@
     <header class="mb-12 text-center">
       <div class="flex items-center justify-center gap-3 mb-4">
         <UIcon name="i-heroicons-bolt-20-solid" class="w-10 h-10 text-primary" />
-        <h1 class="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-5xl">
+        <h1
+          class="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-5xl"
+        >
           @nullix/zod-mongoose
         </h1>
       </div>
       <p class="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-        The ultimate bridge between <span class="text-primary font-semibold">Zod v4</span> and <span class="text-primary font-semibold">Mongoose</span>. Define once, validate everywhere.
+        The ultimate bridge between <span class="text-primary font-semibold">Zod v4</span> and
+        <span class="text-primary font-semibold">Mongoose</span>. Define once, validate everywhere.
       </p>
       <div class="mt-6 flex justify-center gap-4">
         <UBadge color="primary" variant="soft" size="lg">Nuxt 4 Ready</UBadge>
         <UBadge color="neutral" variant="soft" size="lg">TypeScript Native</UBadge>
-        <UButton to="/showcase" size="sm" variant="link" icon="i-heroicons-beaker">View Complex Schemas</UButton>
+        <UButton to="/showcase" size="sm" variant="link" icon="i-heroicons-beaker"
+          >View Complex Schemas</UButton
+        >
       </div>
     </header>
 
@@ -40,12 +45,6 @@
                 class="w-full"
                 icon="i-heroicons-user"
               >
-                <template #leading>
-                  <span v-if="state.author" class="truncate">
-                    {{ users.find(u => u._id === state.author)?.username }}
-                  </span>
-                  <span v-else>Select an author</span>
-                </template>
               </USelectMenu>
             </UFormField>
 
@@ -54,7 +53,7 @@
                 v-model="state.title"
                 placeholder="Enter a catchy title..."
                 class="w-full"
-                icon="i-heroicons-type-specimen"
+                icon="i-heroicons-h1"
               />
             </UFormField>
 
@@ -79,12 +78,6 @@
                 class="w-full"
                 icon="i-heroicons-at-symbol"
               >
-                <template #leading>
-                  <span v-if="state.mentions?.length" class="truncate">
-                    {{ state.mentions.length }} users tagged
-                  </span>
-                  <span v-else>Tag users...</span>
-                </template>
               </USelectMenu>
             </UFormField>
 
@@ -123,18 +116,20 @@
           <USkeleton v-for="i in 3" :key="i" class="h-48 w-full" />
         </div>
 
-        <div v-else-if="!posts || posts.length === 0" class="text-center py-20 bg-gray-50 dark:bg-gray-900/50 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-800">
-          <UIcon name="i-heroicons-chat-bubble-left-right" class="w-12 h-12 text-gray-400 mx-auto mb-4" />
+        <div
+          v-else-if="!posts || posts.length === 0"
+          class="text-center py-20 bg-gray-50 dark:bg-gray-900/50 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-800"
+        >
+          <UIcon
+            name="i-heroicons-chat-bubble-left-right"
+            class="w-12 h-12 text-gray-400 mx-auto mb-4"
+          />
           <h3 class="text-lg font-medium text-gray-900 dark:text-white">No posts yet</h3>
           <p class="text-gray-500 mt-1">Be the first one to start the conversation!</p>
         </div>
 
         <div v-else class="space-y-6">
-          <TransitionGroup
-            name="list"
-            tag="div"
-            class="space-y-6"
-          >
+          <TransitionGroup name="list" tag="div" class="space-y-6">
             <UCard
               v-for="post in posts"
               :key="String(post._id)"
@@ -151,11 +146,21 @@
                       <UAvatar
                         :alt="post.author?.username"
                         size="xs"
-                        :ui="{ root: 'rounded-full' }"
+                        :ui="{root: 'rounded-full'}"
                       />
-                      <span class="font-medium text-primary">@{{ post.author?.username || 'unknown' }}</span>
+                      <span class="font-medium text-primary"
+                        >@{{ post.author?.username || 'unknown' }}</span
+                      >
                       <span>•</span>
-                      <span>{{ post.createdAt ? new Date(post.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'recently' }}</span>
+                      <span>{{
+                        post.createdAt
+                          ? new Date(post.createdAt).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })
+                          : 'recently'
+                      }}</span>
                     </div>
                   </div>
                 </div>
@@ -167,7 +172,9 @@
 
               <template v-if="post.mentions && post.mentions.length > 0" #footer>
                 <div class="flex items-center gap-2">
-                  <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Mentions:</span>
+                  <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider"
+                    >Mentions:</span
+                  >
                   <div class="flex flex-wrap gap-2">
                     <UBadge
                       v-for="m in post.mentions"

@@ -7,8 +7,8 @@
   },
   "scripts": {
     "build": "nuxt build",
-    "dev": "nuxt dev",
-    "debug": "NITRO_INSPECT=0.0.0.0:34003 nuxt dev",
+    "dev": "nuxt dev -p 34002",
+    "debug": "NITRO_INSPECT=0.0.0.0:34003 nuxt dev -p 34002",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare"
