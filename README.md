@@ -26,6 +26,10 @@ This library aims to solve many of the aforementioned problems utilizing `zod` a
 | `.toUpperCase()` | `uppercase: true` | `z.string()` |
 | `.min(n)` / `.positive()` | `min: n` | `z.number()`, `z.date()` |
 | `.max(n)` / `.negative()` | `max: n` | `z.number()`, `z.date()` |
+| `.uuid()` | `type: Schema.Types.UUID` | `z.string()` |
+| `.datetime()` | `type: Date` | `z.string()` |
+| `.date()` | `type: Date` | `z.string()` |
+| `.time()` | `type: String` | `z.string()` |
 
 ### Zod v4 & Mongoose 8 Support
 
@@ -51,6 +55,9 @@ The following table shows how Zod types are mapped to Mongoose types by default.
 | Zod Type | Mongoose Type | Notes |
 | :--- | :--- | :--- |
 | `z.string()` | `String` | Required by default unless `.optional()` is used. |
+| `z.string().uuid()` | `mongoose.Schema.Types.UUID` | Maps to Mongoose's native UUID type. |
+| `z.string().datetime()` | `Date` | Maps to Mongoose `Date` for automatic parsing and indexing. |
+| `z.string().date()` | `Date` | Maps to Mongoose `Date`. |
 | `z.number()` | `Number` | |
 | `z.boolean()` | `Boolean` | |
 | `z.date()` | `Date` | |

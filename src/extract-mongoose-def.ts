@@ -205,19 +205,17 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
         const def = extractMongooseDef(opt, new Map());
         if (typeof def === 'object' && def !== null) {
           // Recursively merge objects to handle overlaps
-          for (const key in def) {
-            let prop = def[key];
-            
+          for (const [key, prop] of Object.entries(def)) {
             // Make all properties optional in the merged schema to allow any union member
             if (typeof prop === 'object' && prop !== null && !Array.isArray(prop)) {
-              prop.required = false;
+              (prop as any).required = false;
             }
 
             if (mergedDef[key] && typeof mergedDef[key] === 'object' && typeof prop === 'object' && !Array.isArray(mergedDef[key]) && !Array.isArray(prop)) {
                // If both are objects, merge their fields
                // IMPORTANT: If one has a specific type and the other is Mixed, prefer the specific type
-               const existingType = mergedDef[key].type || mergedDef[key].instance || (typeof mergedDef[key] === 'function' ? mergedDef[key] : null);
-               const newType = prop.type || prop.instance || (typeof prop === 'function' ? prop : null);
+               const existingType = (mergedDef[key] as any).type || (mergedDef[key] as any).instance || (typeof mergedDef[key] === 'function' ? mergedDef[key] : null);
+               const newType = (prop as any).type || (prop as any).instance || (typeof prop === 'function' ? prop : null);
 
                const isMixed = (t: any) =>
                   t === 'Mixed' ||

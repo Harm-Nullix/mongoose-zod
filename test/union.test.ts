@@ -36,7 +36,7 @@ describe('Zod Union to Mongoose Union', () => {
     expect(typePath.instance).toBe('Mixed');
     expect(distancePath.instance).toBe('Number');
     expect(lapsPath.instance).toBe('Number');
-    
+
     // Ensure all union members are optional in the final schema
     expect(typePath.options.required).toBe(false);
     expect(distancePath.options.required).toBe(false);

@@ -36,6 +36,19 @@ export function mapZodChecksToMongoose(checks: any[], mongooseProp: any) {
       mongooseProp.match = checkDef.pattern;
     }
 
+    // UUID
+    if (traitSet.has('$ZodUUID')) {
+      const mongoose = (globalThis as any).mongoose || (globalThis as any).__mongoose;
+      if (mongoose?.Schema.Types.UUID) {
+        mongooseProp.type = mongoose.Schema.Types.UUID;
+      }
+    }
+
+    // ISO Formats
+    if (traitSet.has('$ZodISODateTime') || traitSet.has('$ZodISODate')) {
+      mongooseProp.type = Date;
+    }
+
     // String Transforms (trim, lowercase, uppercase)
     if (traitSet.has('$ZodCheckOverwrite') && typeof checkDef.tx === 'function') {
       const txStr = checkDef.tx.toString();
