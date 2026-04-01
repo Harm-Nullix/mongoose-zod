@@ -43,30 +43,27 @@ describe('Extended Conversion', () => {
   });
 
   test('should support timestamps via genTimestampsSchema', () => {
-    const timestampSchema = genTimestampsSchema();
-    const schema = timestampSchema.extend({
+    const timestampShape = genTimestampsSchema();
+    const schema = z.object(timestampShape).extend({
       name: z.string(),
     });
 
-    const meta = (timestampSchema as any).meta?.();
-    const mongooseSchema = toMongooseSchema(withMongoose(schema, meta));
+    const mongooseSchema = toMongooseSchema(withMongoose(schema, {timestamps: true}));
 
     expect(mongooseSchema.path('createdAt')).toBeDefined();
     expect(mongooseSchema.path('updatedAt')).toBeDefined();
-    expect((mongooseSchema as any).options.timestamps).toEqual({
-      createdAt: 'createdAt',
-      updatedAt: 'updatedAt',
-    });
+    expect((mongooseSchema as any).options.timestamps).toBe(true);
   });
 
   test('should support custom timestamps via genTimestampsSchema', () => {
-    const timestampSchema = genTimestampsSchema('created_at', 'updated_at');
-    const schema = timestampSchema.extend({
+    const timestampShape = genTimestampsSchema('created_at', 'updated_at');
+    const schema = z.object(timestampShape).extend({
       name: z.string(),
     });
 
-    const meta = (timestampSchema as any).meta?.();
-    const mongooseSchema = toMongooseSchema(withMongoose(schema, meta));
+    const mongooseSchema = toMongooseSchema(
+      withMongoose(schema, {timestamps: {createdAt: 'created_at', updatedAt: 'updated_at'}}),
+    );
 
     expect(mongooseSchema.path('created_at')).toBeDefined();
     expect(mongooseSchema.path('updated_at')).toBeDefined();
@@ -77,13 +74,14 @@ describe('Extended Conversion', () => {
   });
 
   test('should disable timestamps when null passed to genTimestampsSchema', () => {
-    const timestampSchema = genTimestampsSchema('createdAt', null);
-    const schema = timestampSchema.extend({
+    const timestampShape = genTimestampsSchema('createdAt', null);
+    const schema = z.object(timestampShape).extend({
       name: z.string(),
     });
 
-    const meta = (timestampSchema as any).meta?.();
-    const mongooseSchema = toMongooseSchema(withMongoose(schema, meta));
+    const mongooseSchema = toMongooseSchema(
+      withMongoose(schema, {timestamps: {createdAt: 'createdAt', updatedAt: false}}),
+    );
 
     expect(mongooseSchema.path('createdAt')).toBeDefined();
     expect(mongooseSchema.path('updatedAt')).toBeUndefined();

@@ -50,11 +50,10 @@ describe('README Examples', () => {
 
   test('Timestamps', () => {
     const userSchema = withMongoose(
-      z
-        .object({
-          name: z.string(),
-        })
-        .merge(genTimestampsSchema()),
+      z.object({
+        name: z.string(),
+        ...genTimestampsSchema(),
+      }),
       {timestamps: true},
     );
 

@@ -191,8 +191,8 @@ import { toMongooseSchema, genTimestampsSchema, withMongoose } from '@nullix/zod
 const userSchema = withMongoose(
   z.object({
     name: z.string(),
-  })
-  .merge(genTimestampsSchema()),
+    ...genTimestampsSchema(),
+  }),
   { timestamps: true }
 );
 
@@ -363,9 +363,16 @@ Enable or disable frontend mode.
 - This allows schemas to be shared between frontend and backend without requiring Mongoose on the client.
 
 ### `genTimestampsSchema(createdAtField?, updatedAtField?)`
-Returns a Zod object with timestamp fields.
+Returns a plain object (Zod shape) with timestamp fields. This allows for easy spreading into `z.object()`.
 - Default fields are `createdAt` and `updatedAt`.
 - Pass `null` to disable a specific field.
+
+```typescript
+const schema = z.object({
+  ...genTimestampsSchema(),
+  name: z.string(),
+});
+```
 
 ---
 

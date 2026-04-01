@@ -102,20 +102,7 @@ export const genTimestampsSchema = <CrAt = 'createdAt', UpAt = 'updatedAt'>(
     shape[updatedAtField as string] = withMongoose(DateFieldZod(), {index: true});
   }
 
-  const schema = z.object(shape);
-
-  const meta = {
-    timestamps: {
-      createdAt: createdAtField == null ? false : (createdAtField as string),
-      updatedAt: updatedAtField == null ? false : (updatedAtField as string),
-    },
-  };
-
-  // Attach metadata to the instance if supported, but also register it
-  const schemaWithMeta = withMongoose(schema, meta);
-  (schemaWithMeta as any).meta = () => meta;
-
-  return schemaWithMeta;
+  return shape;
 };
 
 /**
