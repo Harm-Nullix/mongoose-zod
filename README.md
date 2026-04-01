@@ -38,8 +38,8 @@ This package is now optimized for **Zod v4** and **Mongoose 8**.
 Key features:
 - **Zod v4 registry**: Securely store Mongoose-specific metadata alongside Zod schemas using native Zod v4 registry.
 - **Automatic Unwrapping**: Support for `.transform()`, `.pipe()`, `.preprocess()`, `.refine()`, `.optional()`, `.nullable()`, and `.brand()`.
-- **Unions**: Primitive Zod unions (`string`, `number`, `boolean`, `date`, `bigint`) are mapped to Mongoose `Schema.Types.Union`. Complex unions (objects, arrays) fallback to `Mixed` for reliability.
-- **Native BigInt**: Maps Zod `bigint` to native Mongoose `BigInt`.
+- **Unions**: Primitive Zod unions (`string`, `number`, `boolean`, `date`, `bigint`) are mapped to Mongoose `Schema.Types.Union`. Object unions are automatically merged into a single schema object where all properties are optional, providing a flexible way to handle polymorphic data. Other complex unions fallback to `Mixed`.
+- **Native BigInt**: Maps Zod `bigint` to native Mongoose `BigInt` (or `Number` as fallback). If you need Mongoose `Long` (64-bit integer), you can specify it via `withMongoose(z.bigint(), { type: 'Long' })`.
 - **Specialized Types**: Direct support for `Buffer` and `ObjectId` via `zObjectId()` and `zBuffer()` helpers (or `z.instanceof()`).
 - **Composite IDs**: Full support for object-based `_id` fields via `{ includeId: true }` metadata.
 - **Isomorphic Support**: Use `setFrontendMode(true)` to allow schemas to be used in frontend environments where Mongoose is not available. Specialized types will automatically fall back to strings/Uint8Arrays while preserving Mongoose metadata for the backend.
@@ -61,7 +61,7 @@ The following table shows how Zod types are mapped to Mongoose types by default.
 | `z.number()` | `Number` | |
 | `z.boolean()` | `Boolean` | |
 | `z.date()` | `Date` | |
-| `z.bigint()` | `BigInt` | Fallback to `Number` if `BigInt` is not supported by the environment. |
+| `z.bigint()` | `BigInt` | Fallback to `Number` if `BigInt` is not supported. Use `withMongoose` with `type: 'Long'` for 64-bit integers. |
 | `z.enum()` | `String` | Includes Mongoose `enum` validation. |
 | `z.nativeEnum()` | `String` | Includes Mongoose `enum` validation. |
 | `z.string().trim()` | `String` | Automatically sets `trim: true`. |
@@ -79,8 +79,8 @@ The following table shows how Zod types are mapped to Mongoose types by default.
 | `zPopulated()` | `mongoose.Schema.Types.ObjectId` | Helper for fields that can be either an `ObjectId` or a populated object. |
 | `z.instanceof(Buffer)` | `mongoose.Schema.Types.Buffer` | |
 | `z.instanceof(ObjectId)` | `mongoose.Schema.Types.ObjectId` | |
-| `z.union()` | `mongoose.Schema.Types.Union` (primitives) or `Mixed` (complex) | Mapped to `Union` for primitives (`string`, `number`, `boolean`, `date`, `bigint`), otherwise `Mixed`. |
-| `z.discriminatedUnion()` | `mongoose.Schema.Types.Union` (primitives) or `Mixed` (complex) | Mapped to `Union` for primitives, otherwise `Mixed`. |
+| `z.union()` | `Schema.Types.Union` (primitives) or `Nested Object` (objects) | Mapped to `Union` for primitives, merged into an object for `z.object()` unions. Others fallback to `Mixed`. |
+| `z.discriminatedUnion()` | `Schema.Types.Union` (primitives) or `Nested Object` (objects) | Mapped to `Union` for primitives, merged into an object for `z.object()` unions. Others fallback to `Mixed`. |
 | `z.literal()` | `String` / `Number` / `Boolean` | Mapped to the literal's type with a Mongoose `enum` constraint. |
 | `z.any()` / `z.unknown()` | `mongoose.Schema.Types.Mixed` | Fallback for unhandled types. |
 

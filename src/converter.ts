@@ -49,7 +49,7 @@ export function toMongooseSchema<T extends z.ZodTypeAny>(
     ...schemaOptions,
   };
 
-  let definition = extractMongooseDef(schema) as unknown as SchemaDefinition;
+  let definition = extractMongooseDef(schema, new Map(), false) as unknown as SchemaDefinition;
 
   // Strip internal includeId metadata that might have leaked into the definition
   if (typeof definition === 'object' && definition !== null) {

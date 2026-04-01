@@ -37,6 +37,7 @@ export type ToMongooseType<T extends z.ZodTypeAny> =
 export function extractMongooseDef<T extends z.ZodTypeAny>(
   schema: T,
   visited: Map<z.ZodTypeAny, any> = new Map(),
+  isField = false,
 ): ToMongooseType<T> & Record<string, any> {
   // Only call converter:before at the very beginning of a run
   if (visited.size === 0) {
@@ -87,7 +88,7 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
   if (visited.has(unwrapped)) {
     const existing = visited.get(unwrapped);
     if (existing === mongooseProp) {
-       return existing as any;
+      return existing as any;
     }
     // console.log('Visited CACHE for', (unwrapped as any)._def.type, existing);
     if (Object.keys(meta).length > 0) {
@@ -130,7 +131,9 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
 
   // Handle recursion and specific types via separate handlers
   if (type === 'object') {
-    const result = handleObject(unwrapped as any, mongooseProp, visited, extractMongooseDef as any);
+    const wrapperFn = (s: z.ZodTypeAny, v: Map<z.ZodTypeAny, any>) =>
+      extractMongooseDef(s, v, true);
+    const result = handleObject(unwrapped as any, mongooseProp, visited, wrapperFn);
     callHookSync('converter:after', {
       schema: schema as z.ZodTypeAny,
       mongooseProp: result,
@@ -142,17 +145,17 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
   }
 
   if (type === 'array' || type === 'set' || type === 'tuple') {
-    handleArray(unwrapped as any, mongooseProp, visited, extractMongooseDef as any);
+    handleArray(unwrapped as any, mongooseProp, visited, (s, v) => extractMongooseDef(s, v, true));
   }
 
   if (type === 'record' || type === 'map') {
-    handleRecord(unwrapped as any, mongooseProp, visited, extractMongooseDef as any);
+    handleRecord(unwrapped as any, mongooseProp, visited, (s, v) => extractMongooseDef(s, v, true));
   }
 
   // Handle Intersections
   if (type === 'intersection') {
-    const left = extractMongooseDef((unwrapped as any)._def.left, visited);
-    const right = extractMongooseDef((unwrapped as any)._def.right, visited);
+    const left = extractMongooseDef((unwrapped as any)._def.left, visited, isField);
+    const right = extractMongooseDef((unwrapped as any)._def.right, visited, isField);
 
     if (typeof left === 'object' && typeof right === 'object') {
       Object.assign(mongooseProp, left, right);
@@ -161,100 +164,174 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
     }
   }
 
-  // Handle Unions
-  if (
-    (type === 'union' ||
-      type === 'discriminatedunion' ||
-      type === 'discriminated_union') &&
-    !mongooseProp.type
-  ) {
-    const mongoose = getMongoose();
-    // We only map simple primitive unions to Mongoose Union by default to avoid complexity
-    const options = (unwrapped as any).options || (unwrapped as any)._def.options;
-    const unionCtx = {
-      isSimpleUnion: false,
-      isObjectUnion: false,
-    };
+    if (
+      (type === 'union' ||
+        type === 'discriminatedunion' ||
+        type === 'discriminated_union' ||
+        type === 'xor') &&
+      !mongooseProp.type
+    ) {
+      const mongoose = getMongoose();
+      const options = (unwrapped as any).options || (unwrapped as any)._def.options;
+      const unionCtx = {
+        isSimpleUnion: false,
+        isObjectUnion: false,
+        isXor:
+          type === 'xor' ||
+          (((unwrapped as any)._def?.inclusive === false ||
+            (schema as any)._def?.inclusive === false) &&
+            !(unwrapped as any)._def?.discriminator &&
+            !(schema as any)._def?.discriminator),
+      };
 
-    if (Array.isArray(options) && options.length > 0) {
-      unionCtx.isSimpleUnion = options.every((opt) => {
-        const {type} = unwrapZodSchema(opt).schema._def;
-        return ['string', 'number', 'boolean', 'date', 'bigint', 'literal'].includes(type);
-      });
+      if (Array.isArray(options) && options.length > 0) {
+        unionCtx.isSimpleUnion = options.every((opt) => {
+          const {type} = unwrapZodSchema(opt).schema._def;
+          return ['string', 'number', 'boolean', 'date', 'bigint', 'literal'].includes(type);
+        });
 
-      unionCtx.isObjectUnion = options.every((opt) => {
-        const {type} = unwrapZodSchema(opt).schema._def;
-        return type === 'object';
-      });
-    }
+        unionCtx.isObjectUnion = options.every((opt) => {
+          const {type} = unwrapZodSchema(opt).schema._def;
+          return type === 'object';
+        });
+      }
 
-    callHookSync('schema:union:before', {schema: unwrapped as any, mongooseProp, ctx: unionCtx});
+      callHookSync('schema:union:before', {schema: unwrapped as any, mongooseProp, ctx: unionCtx});
 
-    if (mongoose?.Schema.Types.Union && unionCtx.isSimpleUnion && options.length > 0) {
-      mongooseProp.type = mongoose.Schema.Types.Union;
-      mongooseProp.of = options.map((opt: any) => {
-        const def = extractMongooseDef(opt, visited);
-        return (def as any).type || (def as any);
-      });
-    } else if (unionCtx.isObjectUnion && options.length > 0) {
-      // Merge all object properties into a single schema object
-      // This is a common pattern for Discriminated Unions in Mongoose when not using actual Discriminators
-      const mergedDef: any = {};
-      for (const opt of options) {
-        // Use a clean visited map for each branch to avoid cross-pollination of properties
-        const def = extractMongooseDef(opt, new Map());
-        if (typeof def === 'object' && def !== null) {
-          // Recursively merge objects to handle overlaps
-          for (const [key, prop] of Object.entries(def)) {
-            // Make all properties optional in the merged schema to allow any union member
-            if (typeof prop === 'object' && prop !== null && !Array.isArray(prop)) {
-              (prop as any).required = false;
-            }
-
-            if (mergedDef[key] && typeof mergedDef[key] === 'object' && typeof prop === 'object' && !Array.isArray(mergedDef[key]) && !Array.isArray(prop)) {
-               // If both are objects, merge their fields
-               // IMPORTANT: If one has a specific type and the other is Mixed, prefer the specific type
-               const existingType = (mergedDef[key] as any).type || (mergedDef[key] as any).instance || (typeof mergedDef[key] === 'function' ? mergedDef[key] : null);
-               const newType = (prop as any).type || (prop as any).instance || (typeof prop === 'function' ? prop : null);
-
-               const isMixed = (t: any) =>
+      if (
+        getMongoose()?.Schema.Types.Union &&
+        unionCtx.isSimpleUnion &&
+        options.length > 0 &&
+        !unionCtx.isXor
+      ) {
+        mongooseProp.type = mongoose.Schema.Types.Union;
+        mongooseProp.of = options.map((opt: any) => {
+          const def = extractMongooseDef(opt, visited, true);
+          return (def as any).type || (def as any);
+        });
+      } else if (unionCtx.isObjectUnion && options.length > 0) {
+        // Merge all object properties into a single schema object
+        const mergedDef: any = {};
+        for (const opt of options) {
+          const def = extractMongooseDef(opt, new Map(), true);
+          if (typeof def === 'object' && def !== null) {
+            for (const [key, prop] of Object.entries(def)) {
+              if (typeof prop === 'object' && prop !== null && !Array.isArray(prop)) {
+                (prop as any).required = false;
+              }
+              if (
+                mergedDef[key] &&
+                typeof mergedDef[key] === 'object' &&
+                typeof prop === 'object' &&
+                !Array.isArray(mergedDef[key]) &&
+                !Array.isArray(prop)
+              ) {
+                const existingType =
+                  (mergedDef[key] as any).type ||
+                  (mergedDef[key] as any).instance ||
+                  (typeof mergedDef[key] === 'function' ? mergedDef[key] : null);
+                const newType =
+                  (prop as any).type ||
+                  (prop as any).instance ||
+                  (typeof prop === 'function' ? prop : null);
+                const isMixed = (t: any) =>
+                  !t ||
                   t === 'Mixed' ||
+                  t === 'SchemaMixed' ||
                   t?.name === 'Mixed' ||
                   t?.instance === 'Mixed' ||
                   t?.name === 'SchemaMixed' ||
-                  (getMongoose()?.Schema.Types.Mixed && t === getMongoose()?.Schema.Types.Mixed);
+                  t?.instance === 'SchemaMixed' ||
+                  (getMongoose()?.Schema.Types.Mixed &&
+                    (t === getMongoose()?.Schema.Types.Mixed ||
+                      t?.instance === 'Mixed' ||
+                      t?.instance === 'SchemaMixed'));
 
-               if (isMixed(existingType) && !isMixed(newType)) {
-                  // If existing is Mixed but new is specific, replace
+                if (isMixed(existingType) && !isMixed(newType)) {
                   mergedDef[key] = prop;
-               } else if (!isMixed(existingType) && isMixed(newType)) {
+                } else if (!isMixed(existingType) && isMixed(newType)) {
                   // Keep existing
-               } else {
+                } else {
                   Object.assign(mergedDef[key], prop);
-               }
-            } else if (mergedDef[key] && (typeof mergedDef[key] !== 'object' || Array.isArray(mergedDef[key])) && typeof prop === 'object' && !Array.isArray(prop)) {
-               // If existing is primitive but new is object, prefer object (more specific)
-               mergedDef[key] = prop;
-            } else if (mergedDef[key] && typeof mergedDef[key] === 'object' && !Array.isArray(mergedDef[key]) && (typeof prop !== 'object' || Array.isArray(prop))) {
-               // If existing is object but new is primitive, keep object
-            } else if (!mergedDef[key]) {
-               // New property
-               mergedDef[key] = prop;
+                }
+              } else if (
+                !mergedDef[key] ||
+                typeof mergedDef[key] !== 'object' ||
+                Array.isArray(mergedDef[key])
+              ) {
+                mergedDef[key] = prop;
+              }
             }
           }
         }
-      }
-      // Since it's an object union, we merge it directly into mongooseProp
-      // but only if we are at the top level of this node.
-      if (!mongooseProp.type || mongooseProp.type === (getMongoose()?.Schema.Types.Mixed || 'Mixed')) {
-         delete mongooseProp.type;
-      }
-      Object.assign(mongooseProp, mergedDef);
-    } else {
+
+        if (isField && unionCtx.isXor) {
+          // For nested XOR, always use Mixed with validator to ensure mutual exclusivity
+          mongooseProp.type = mongoose?.Schema.Types.Mixed || 'Mixed';
+          mongooseProp.validate = {
+            validator(v: any) {
+              try {
+                (schema as any).parse(v);
+                return true;
+              } catch {
+                return false;
+              }
+            },
+            message: 'XOR validation failed',
+          };
+        } else {
+          // For root or other object unions, merge properties
+          if (
+            !mongooseProp.type ||
+            mongooseProp.type === (getMongoose()?.Schema.Types.Mixed || 'Mixed')
+          ) {
+            delete mongooseProp.type;
+          }
+          Object.assign(mongooseProp, mergedDef);
+          // If the object contains a 'type' property, Mongoose might misinterpret it as a field definition.
+          // We can hint that it's a nested object by using a Schema if 'type' is present along with other fields.
+          if (
+            isField &&
+            Object.prototype.hasOwnProperty.call(mongooseProp, 'type') &&
+            Object.keys(mongooseProp).length > 1
+          ) {
+            const mongooseInstance = getMongoose();
+            if (mongooseInstance) {
+              mongooseProp.type = new mongooseInstance.Schema(mongooseProp, {_id: false});
+              for (const key of Object.keys(mongooseProp)) {
+                if (key !== 'type') delete mongooseProp[key];
+              }
+            }
+          }
+        }
+      } else {
       mongooseProp.type = mongoose?.Schema.Types.Mixed || 'Mixed';
+      if (
+        isField &&
+        (unionCtx.isXor ||
+          type === 'discriminated_union' ||
+          type === 'discriminatedunion' ||
+          type === 'union')
+      ) {
+        mongooseProp.validate = {
+          validator(v: any) {
+            try {
+              (schema as any).parse(v);
+              return true;
+            } catch {
+              return false;
+            }
+          },
+          message: unionCtx.isXor ? 'XOR validation failed' : 'Union validation failed',
+        };
+      }
     }
 
-    callHookSync('schema:union:after', {schema: unwrapped as any, mongooseProp, ctx: unionCtx});
+    callHookSync('schema:union:after', {
+      schema: unwrapped as any,
+      mongooseProp,
+      ctx: unionCtx,
+    });
   }
 
   if (type === 'literal' && !mongooseProp.type) {
@@ -316,7 +393,7 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
   // Handle Lazy (Recursion Support)
   if (type === 'lazy') {
     const inner = def.getter();
-    const result = extractMongooseDef(inner, visited);
+    const result = extractMongooseDef(inner, visited, isField);
     if (Object.keys(meta).length > 0 && result !== mongooseProp) {
       if (typeof result === 'object' && !Array.isArray(result)) {
         Object.assign(mongooseProp, result);

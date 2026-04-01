@@ -71,12 +71,12 @@ export interface MongooseZodHooks {
   /**
    * Called when a ZodUnion/DiscriminatedUnion is about to be processed.
    */
-  'schema:union:before': (context: { schema: z.ZodUnion<any> | z.ZodDiscriminatedUnion<any, any>; mongooseProp: any; ctx: { isSimpleUnion: boolean } }) => void;
+  'schema:union:before': (context: { schema: z.ZodUnion<any> | z.ZodDiscriminatedUnion<any, any>; mongooseProp: any; ctx: { isSimpleUnion: boolean; isObjectUnion: boolean; isXor: boolean } }) => void;
 
   /**
    * Called after a ZodUnion/DiscriminatedUnion has been processed.
    */
-  'schema:union:after': (context: { schema: z.ZodUnion<any> | z.ZodDiscriminatedUnion<any, any>; mongooseProp: any; ctx: { isSimpleUnion: boolean } }) => void;
+  'schema:union:after': (context: { schema: z.ZodUnion<any> | z.ZodDiscriminatedUnion<any, any>; mongooseProp: any; ctx: { isSimpleUnion: boolean; isObjectUnion: boolean; isXor: boolean } }) => void;
 
   /**
    * Called after the conversion of a Zod schema is complete.
