@@ -160,10 +160,39 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
   if (
     (type === 'union' ||
       type === 'discriminatedunion' ||
-      type === 'discriminated_union' ||
-      type === 'literal') &&
+      type === 'discriminated_union') &&
     !mongooseProp.type
   ) {
+    const mongoose = getMongoose();
+    // We only map simple primitive unions to Mongoose Union by default to avoid complexity
+    const options = (unwrapped as any).options || (unwrapped as any)._def.options;
+    const unionCtx = {
+      isSimpleUnion: false
+    };
+
+    if (Array.isArray(options) && options.length > 0) {
+      unionCtx.isSimpleUnion = options.every((opt) => {
+        const {type} = unwrapZodSchema(opt).schema._def;
+        return ['string', 'number', 'boolean', 'date', 'bigint'].includes(type);
+      });
+    }
+
+    callHookSync('schema:union:before', {schema: unwrapped as any, mongooseProp, ctx: unionCtx});
+
+    if (mongoose?.Schema.Types.Union && unionCtx.isSimpleUnion && options.length > 0) {
+      mongooseProp.type = mongoose.Schema.Types.Union;
+      mongooseProp.of = options.map((opt: any) => {
+        const def = extractMongooseDef(opt, visited);
+        return (def as any).type || (def as any);
+      });
+    } else {
+      mongooseProp.type = mongoose?.Schema.Types.Mixed || 'Mixed';
+    }
+
+    callHookSync('schema:union:after', {schema: unwrapped as any, mongooseProp, ctx: unionCtx});
+  }
+
+  if (type === 'literal' && !mongooseProp.type) {
     mongooseProp.type = getMongoose()?.Schema.Types.Mixed || 'Mixed';
   }
 

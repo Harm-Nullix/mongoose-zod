@@ -82,6 +82,19 @@ describe('MegaZodSchema conversion', () => {
     expect(mongooseSchema.path('promiseData')).toBeInstanceOf(mongoose.Schema.Types.Mixed);
   });
 
+  test('should verify unions and intersections', () => {
+    const mongooseSchema = toMongooseSchema(MegaZodSchema);
+
+    expect(mongooseSchema.path('stringOrNumber').instance).toBe('Union');
+    expect(mongooseSchema.path('alternativeUnion').instance).toBe('Union');
+
+    // Complex unions or ones with literals fall back to Mixed for now
+    expect(mongooseSchema.path('eventPayload').instance).toBe('Mixed');
+
+    // Intersections currently flatten or fall back to Mixed
+    expect(mongooseSchema.path('personWithEmployeeData')).toBeInstanceOf(mongoose.Schema.Types.Mixed);
+  });
+
   test('should verify new _id and refs fields', () => {
     const mongooseSchema = toMongooseSchema(MegaZodSchema);
 

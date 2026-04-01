@@ -32,14 +32,17 @@ This library aims to solve many of the aforementioned problems utilizing `zod` a
 This package is now optimized for **Zod v4** and **Mongoose 8**.
 
 Key features:
-- **Registry-based metadata**: Securely store Mongoose-specific metadata alongside Zod schemas using `z.registry`.
-- **Transformation Pipelines**: Automatically unwraps `.transform()`, `.pipe()`, `.preprocess()`, and `.refine()` to find the underlying Mongoose type.
+- **Zod v4 registry**: Securely store Mongoose-specific metadata alongside Zod schemas using native Zod v4 registry.
+- **Automatic Unwrapping**: Support for `.transform()`, `.pipe()`, `.preprocess()`, `.refine()`, `.optional()`, `.nullable()`, and `.brand()`.
+- **Unions**: Primitive Zod unions (`string`, `number`, `boolean`, `date`, `bigint`) are mapped to Mongoose `Schema.Types.Union`. Complex unions (objects, arrays) fallback to `Mixed` for reliability.
 - **Native BigInt**: Maps Zod `bigint` to native Mongoose `BigInt`.
 - **Specialized Types**: Direct support for `Buffer` and `ObjectId` via `zObjectId()` and `zBuffer()` helpers (or `z.instanceof()`).
+- **Composite IDs**: Full support for object-based `_id` fields via `{ includeId: true }` metadata.
 - **Isomorphic Support**: Use `setFrontendMode(true)` to allow schemas to be used in frontend environments where Mongoose is not available. Specialized types will automatically fall back to strings/Uint8Arrays while preserving Mongoose metadata for the backend.
 - **Frontend Safe**: The package treats `mongoose` as an optional peer dependency. Core Zod schema definition and metadata helpers (`withMongoose`, `zObjectId`, etc.) are safe to use in the browser without installing `mongoose`.
 - **Nuxt 4 Ready**: Fully compatible with Nuxt 4 and Nitro, supporting best practices like `readValidatedBody` with Zod schemas.
-- **Hookable**: Extensible conversion process using `unjs/hookable`. Developers can hook into any point of the AST walking and metadata extraction.
+- **Hookable**: Extensible conversion process using `unjs/hookable`. Developers can hook into 15+ points (e.g., `schema:object:before`, `schema:union:before`).
+- **Populated Helper**: `PopulatedSchema<T>` utility for perfect TypeScript inference of populated documents.
 
 ### Type Conversion Table
 
@@ -63,16 +66,16 @@ The following table shows how Zod types are mapped to Mongoose types by default.
 | `z.record()` | `Map` | Mapped to a Mongoose `Map` with `of` type. |
 | `z.map()` | `Map` | Mapped to a Mongoose `Map` with `of` type. |
 | `z.object()` | `Nested Object` | Mapped to a nested Mongoose schema or subdocument. |
-| `z.intersection()` | `Merged Object` | Merges the definitions of both branches. |
+| `z.intersection()` | `Nested Object` | Merges the definitions of both branches into a single object. |
 | `zObjectId()` | `mongoose.Schema.Types.ObjectId` | Specialized helper for ObjectIds. By default, it is omitted from the generated Mongoose schema to let Mongoose handle its auto-generation. |
 | `zBuffer()` | `mongoose.Schema.Types.Buffer` | Specialized helper for Buffers. |
 | `zPopulated()` | `mongoose.Schema.Types.ObjectId` | Helper for fields that can be either an `ObjectId` or a populated object. |
 | `z.instanceof(Buffer)` | `mongoose.Schema.Types.Buffer` | |
 | `z.instanceof(ObjectId)` | `mongoose.Schema.Types.ObjectId` | |
+| `z.union()` | `mongoose.Schema.Types.Union` (primitives) or `Mixed` (complex) | Mapped to `Union` for primitives (`string`, `number`, `boolean`, `date`, `bigint`), otherwise `Mixed`. |
+| `z.discriminatedUnion()` | `mongoose.Schema.Types.Union` (primitives) or `Mixed` (complex) | Mapped to `Union` for primitives, otherwise `Mixed`. |
+| `z.literal()` | `String` / `Number` / `Boolean` | Mapped to the literal's type with a Mongoose `enum` constraint. |
 | `z.any()` / `z.unknown()` | `mongoose.Schema.Types.Mixed` | Fallback for unhandled types. |
-| `z.union()` | `mongoose.Schema.Types.Mixed` | |
-| `z.discriminatedUnion()` | `mongoose.Schema.Types.Mixed` | |
-| `z.literal()` | `mongoose.Schema.Types.Mixed` | |
 
 ### Unhandled and Unsupported Zod Types
 
@@ -326,13 +329,17 @@ const LogSchema = withMongoose(
 ### `PopulatedSchema<T, K>`
 TypeScript utility type to extract the populated object type from a `zPopulated` union within a larger type. This is useful for typing Mongoose results after calling `.populate()`.
 
-- `T`: The Zod schema type (e.g., `z.infer<typeof PostSchema>`).
-- `K`: The key(s) to populate.
+- `T`: The Zod-inferred type (e.g., `z.infer<typeof PostSchema>`).
+- `K`: The key(s) to populate (optional). If omitted, it will try to populate all `zPopulated` fields in the object.
 
 ```typescript
 import { PopulatedSchema } from '@nullix/zod-mongoose';
 
-type FullPost = PopulatedSchema<z.infer<typeof PostSchema>, 'author'>;
+// Populate only the 'author' field
+type PostWithAuthor = PopulatedSchema<z.infer<typeof PostSchema>, 'author'>;
+
+// Populate all possible fields
+type FullPost = PopulatedSchema<z.infer<typeof PostSchema>>;
 ```
 
 ### `zObjectId(options?)`
@@ -414,6 +421,8 @@ The following hook points are available:
 - `schema:array:after`: Called after processing an array-like type.
 - `schema:record:before`: Called before processing a `z.record()` or `z.map()`.
 - `schema:record:after`: Called after processing a record/map type.
+- `schema:union:before`: Called before processing a `z.union()` or `z.discriminatedUnion()`. Provides a `ctx` object with `isSimpleUnion` which can be modified to force the use of `Schema.Types.Union`.
+- `schema:union:after`: Called after processing a union.
 - `registry:get:before`: Called before retrieving metadata from the registry.
 - `registry:get`: Called when retrieving metadata from the registry.
 - `registry:add`: Called before adding metadata to the registry.

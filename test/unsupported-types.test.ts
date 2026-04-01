@@ -14,10 +14,13 @@ describe('Improved Types behavior', () => {
     expect(def.b.type).toBe(Number);
   });
 
-  test('z.union should currently fallback to Mixed', () => {
+  test('z.union should map to Mongoose Union for simple types', () => {
     const schema = z.union([z.string(), z.number()]);
     const def = extractMongooseDef(schema) as any;
-    expect(def.type).toBe(mongoose.Schema.Types.Mixed);
+    expect(def.type).toBe(mongoose.Schema.Types.Union);
+    expect(def.of).toHaveLength(2);
+    expect(def.of[0]).toBe(String);
+    expect(def.of[1]).toBe(Number);
   });
 
   test('z.discriminatedUnion should currently fallback to Mixed', () => {
