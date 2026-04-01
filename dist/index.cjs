@@ -2,6 +2,194 @@
 
 var v4 = require('zod/v4');
 
+//#region src/utils.ts
+function flatHooks(configHooks, hooks = {}, parentName) {
+	for (const key in configHooks) {
+		const subHook = configHooks[key];
+		const name = parentName ? `${parentName}:${key}` : key;
+		if (typeof subHook === "object" && subHook !== null) flatHooks(subHook, hooks, name);
+		else if (typeof subHook === "function") hooks[name] = subHook;
+	}
+	return hooks;
+}
+const createTask = /* @__PURE__ */ (() => {
+	if (console.createTask) return console.createTask;
+	const defaultTask = { run: (fn) => fn() };
+	return () => defaultTask;
+})();
+function callHooks(hooks, args, startIndex, task) {
+	for (let i = startIndex; i < hooks.length; i += 1) try {
+		const result = task ? task.run(() => hooks[i](...args)) : hooks[i](...args);
+		if (result instanceof Promise) return result.then(() => callHooks(hooks, args, i + 1, task));
+	} catch (error) {
+		return Promise.reject(error);
+	}
+}
+function serialTaskCaller(hooks, args, name) {
+	if (hooks.length > 0) return callHooks(hooks, args, 0, createTask(name));
+}
+function parallelTaskCaller(hooks, args, name) {
+	if (hooks.length > 0) {
+		const task = createTask(name);
+		return Promise.all(hooks.map((hook) => task.run(() => hook(...args))));
+	}
+}
+function callEachWith(callbacks, arg0) {
+	for (const callback of [...callbacks]) callback(arg0);
+}
+//#endregion
+//#region src/hookable.ts
+var Hookable = class {
+	_hooks;
+	_before;
+	_after;
+	_deprecatedHooks;
+	_deprecatedMessages;
+	constructor() {
+		this._hooks = {};
+		this._before = void 0;
+		this._after = void 0;
+		this._deprecatedMessages = void 0;
+		this._deprecatedHooks = {};
+		this.hook = this.hook.bind(this);
+		this.callHook = this.callHook.bind(this);
+		this.callHookWith = this.callHookWith.bind(this);
+	}
+	hook(name, function_, options = {}) {
+		if (!name || typeof function_ !== "function") return () => {};
+		const originalName = name;
+		let dep;
+		while (this._deprecatedHooks[name]) {
+			dep = this._deprecatedHooks[name];
+			name = dep.to;
+		}
+		if (dep && !options.allowDeprecated) {
+			let message = dep.message;
+			if (!message) message = `${originalName} hook has been deprecated` + (dep.to ? `, please use ${dep.to}` : "");
+			if (!this._deprecatedMessages) this._deprecatedMessages = /* @__PURE__ */ new Set();
+			if (!this._deprecatedMessages.has(message)) {
+				console.warn(message);
+				this._deprecatedMessages.add(message);
+			}
+		}
+		if (!function_.name) try {
+			Object.defineProperty(function_, "name", {
+				get: () => "_" + name.replace(/\W+/g, "_") + "_hook_cb",
+				configurable: true
+			});
+		} catch {}
+		this._hooks[name] = this._hooks[name] || [];
+		this._hooks[name].push(function_);
+		return () => {
+			if (function_) {
+				this.removeHook(name, function_);
+				function_ = void 0;
+			}
+		};
+	}
+	hookOnce(name, function_) {
+		let _unreg;
+		let _function = (...arguments_) => {
+			if (typeof _unreg === "function") _unreg();
+			_unreg = void 0;
+			_function = void 0;
+			return function_(...arguments_);
+		};
+		_unreg = this.hook(name, _function);
+		return _unreg;
+	}
+	removeHook(name, function_) {
+		const hooks = this._hooks[name];
+		if (hooks) {
+			const index = hooks.indexOf(function_);
+			if (index !== -1) hooks.splice(index, 1);
+			if (hooks.length === 0) this._hooks[name] = void 0;
+		}
+	}
+	clearHook(name) {
+		this._hooks[name] = void 0;
+	}
+	deprecateHook(name, deprecated) {
+		this._deprecatedHooks[name] = typeof deprecated === "string" ? { to: deprecated } : deprecated;
+		const _hooks = this._hooks[name] || [];
+		this._hooks[name] = void 0;
+		for (const hook of _hooks) this.hook(name, hook);
+	}
+	deprecateHooks(deprecatedHooks) {
+		for (const name in deprecatedHooks) this.deprecateHook(name, deprecatedHooks[name]);
+	}
+	addHooks(configHooks) {
+		const hooks = flatHooks(configHooks);
+		const removeFns = Object.keys(hooks).map((key) => this.hook(key, hooks[key]));
+		return () => {
+			for (const unreg of removeFns) unreg();
+			removeFns.length = 0;
+		};
+	}
+	removeHooks(configHooks) {
+		const hooks = flatHooks(configHooks);
+		for (const key in hooks) this.removeHook(key, hooks[key]);
+	}
+	removeAllHooks() {
+		this._hooks = {};
+	}
+	callHook(name, ...args) {
+		return this.callHookWith(serialTaskCaller, name, args);
+	}
+	callHookParallel(name, ...args) {
+		return this.callHookWith(parallelTaskCaller, name, args);
+	}
+	callHookWith(caller, name, args) {
+		const event = this._before || this._after ? {
+			name,
+			args,
+			context: {}
+		} : void 0;
+		if (this._before) callEachWith(this._before, event);
+		const result = caller(this._hooks[name] ? [...this._hooks[name]] : [], args, name);
+		if (result instanceof Promise) return result.finally(() => {
+			if (this._after && event) callEachWith(this._after, event);
+		});
+		if (this._after && event) callEachWith(this._after, event);
+		return result;
+	}
+	beforeEach(function_) {
+		this._before = this._before || [];
+		this._before.push(function_);
+		return () => {
+			if (this._before !== void 0) {
+				const index = this._before.indexOf(function_);
+				if (index !== -1) this._before.splice(index, 1);
+			}
+		};
+	}
+	afterEach(function_) {
+		this._after = this._after || [];
+		this._after.push(function_);
+		return () => {
+			if (this._after !== void 0) {
+				const index = this._after.indexOf(function_);
+				if (index !== -1) this._after.splice(index, 1);
+			}
+		};
+	}
+};
+function createHooks() {
+	return new Hookable();
+}
+
+const hooks = createHooks();
+/**
+ * Synchronous hook caller for Hookable.
+ */
+function callHookSync(name, ...args) {
+    hooks.callHookWith((callbacks, args) => {
+        for (const callback of callbacks) {
+            callback(...args);
+        }
+    }, name, args);
+}
+
 /**
  * This securely stores our Mongoose metadata alongside the Zod schema instances
  * without polluting the actual validation logic.
@@ -11,9 +199,13 @@ const mongooseRegistry = v4.z.registry();
  * A clean wrapper to attach Mongoose metadata to any Zod schema.
  */
 function withMongoose(schema, meta) {
+    callHookSync('registry:get:before', { schema });
     const existing = mongooseRegistry.get(schema) || {};
-    // @ts-expect-error - TS sometimes struggles with complex Mongoose types in Registry
-    mongooseRegistry.add(schema, { ...existing, ...meta });
+    callHookSync('registry:get', { schema, meta: existing });
+    const merged = { ...existing, ...meta };
+    callHookSync('registry:add', { schema, meta: merged });
+    mongooseRegistry.add(schema, merged);
+    callHookSync('registry:added', { schema, meta: merged });
     return schema;
 }
 
@@ -196,12 +388,14 @@ function mapZodChecksToMongoose(checks, mongooseProp) {
             }
         }
     }
+    callHookSync('validation:mappers', { checks, mongooseProp });
 }
 
 /**
  * Handles ZodObject conversion to Mongoose Schema definition.
  */
 function handleObject(unwrapped, mongooseProp, visited, extractMongooseDef) {
+    callHookSync('schema:object:before', { schema: unwrapped, mongooseProp, visited });
     const { shape } = unwrapped;
     const objDef = {};
     // We must ensure recursive calls see the current object to break cycles.
@@ -216,13 +410,30 @@ function handleObject(unwrapped, mongooseProp, visited, extractMongooseDef) {
             const idMeta = mongooseRegistry.get(shape[key]) || {};
             const unwrappedId = unwrapZodSchema(shape[key]).schema;
             const unwrappedIdMeta = mongooseRegistry.get(unwrappedId) || {};
-            if (idMeta.includeId !== true && unwrappedIdMeta.includeId !== true)
+            if (idMeta.includeId !== true &&
+                unwrappedIdMeta.includeId !== true &&
+                mongooseProp.includeId !== true) {
                 continue;
+            }
         }
-        objDef[key] = extractMongooseDef(shape[key], visited);
+        const def = extractMongooseDef(shape[key], visited);
+        if (typeof def === 'object' && def !== null && !Array.isArray(def)) {
+            const { includeId, ...cleanDef } = def;
+            objDef[key] = cleanDef;
+        }
+        else {
+            objDef[key] = def;
+        }
+        callHookSync('schema:object:field', { key, schema: shape[key], objDef, visited });
     }
     // If the developer didn't provide a strict Mongoose type override, return the shape
-    if (!mongooseProp.type) {
+    let result;
+    if (mongooseProp.type) {
+        // If there is a type override, merge the object definition into the result
+        Object.assign(mongooseProp, objDef);
+        result = mongooseProp;
+    }
+    else {
         Object.assign(mongooseProp, objDef);
         const topLevelOptions = new Set([
             'collection',
@@ -244,16 +455,16 @@ function handleObject(unwrapped, mongooseProp, visited, extractMongooseDef) {
                 return false;
             return true;
         });
-        return hasFieldMetadata ? mongooseProp : objDef;
+        result = hasFieldMetadata ? mongooseProp : objDef;
     }
-    // If there is a type override, merge the object definition into the result
-    Object.assign(mongooseProp, objDef);
-    return mongooseProp;
+    callHookSync('schema:object:after', { schema: unwrapped, mongooseProp, objDef, result });
+    return result;
 }
 /**
  * Handles ZodArray, ZodSet, and ZodTuple conversion.
  */
 function handleArray(unwrapped, mongooseProp, visited, extractMongooseDef) {
+    callHookSync('schema:array:before', { schema: unwrapped, mongooseProp, visited });
     const element = unwrapped.element ||
         unwrapped._def.valueType ||
         unwrapped._def.rest ||
@@ -272,24 +483,28 @@ function handleArray(unwrapped, mongooseProp, visited, extractMongooseDef) {
             mongooseProp.type = [innerType]; // Restore type as array
         }
     }
+    callHookSync('schema:array:after', { schema: unwrapped, mongooseProp, innerDef });
 }
 /**
  * Handles ZodRecord and ZodMap conversion.
  */
 function handleRecord(unwrapped, mongooseProp, visited, extractMongooseDef) {
+    callHookSync('schema:record:before', { schema: unwrapped, mongooseProp, visited });
     const valueType = unwrapped.valueType ||
         unwrapped.valueSchema ||
         unwrapped._def.valueType ||
         unwrapped._def.valueSchema ||
         unwrapped._def.innerType; // For some Zod versions
+    let innerDef;
     if (!mongooseProp.type || mongooseProp.type === Map) {
         mongooseProp.type = Map;
         const finalValueType = valueType || unwrapped.valueSchema || unwrapped._def?.valueSchema;
         if (finalValueType) {
-            const innerDef = extractMongooseDef(finalValueType, visited);
+            innerDef = extractMongooseDef(finalValueType, visited);
             mongooseProp.of = innerDef.type || innerDef;
         }
     }
+    callHookSync('schema:record:after', { schema: unwrapped, mongooseProp, innerDef });
 }
 
 /**
@@ -297,16 +512,27 @@ function handleRecord(unwrapped, mongooseProp, visited, extractMongooseDef) {
  * We extract the Zod type and merge it with any registered Mongoose metadata.
  */
 function extractMongooseDef(schema, visited = new Map()) {
+    // Only call converter:before at the very beginning of a run
+    if (visited.size === 0) {
+        callHookSync('converter:before', { schema: schema, visited });
+    }
+    callHookSync('converter:start', { schema: schema, visited });
     const { schema: unwrapped, features } = unwrapZodSchema(schema);
     // Pull any explicitly registered Mongoose metadata
+    callHookSync('registry:get:before', { schema: schema });
     const meta = mongooseRegistry.get(schema) || {};
+    callHookSync('registry:get', { schema: schema, meta });
+    callHookSync('registry:get:before', { schema: unwrapped });
     const unwrappedMeta = mongooseRegistry.get(unwrapped) || {};
+    callHookSync('registry:get', { schema: unwrapped, meta: unwrappedMeta });
     // If we have a chain of wrappers, collect metadata from all of them.
     let currentMeta = { ...unwrappedMeta, ...meta };
     if (schema._def.innerType) {
         let inner = schema._def.innerType;
         while (inner) {
+            callHookSync('registry:get:before', { schema: inner });
             const innerMeta = mongooseRegistry.get(inner);
+            callHookSync('registry:get', { schema: inner, meta: innerMeta });
             if (innerMeta) {
                 currentMeta = { ...innerMeta, ...currentMeta };
             }
@@ -314,6 +540,13 @@ function extractMongooseDef(schema, visited = new Map()) {
         }
     }
     const mongooseProp = currentMeta;
+    callHookSync('converter:unwrapped', {
+        schema: schema,
+        unwrapped,
+        features,
+        meta: currentMeta,
+        mongooseProp: mongooseProp,
+    });
     if (features.isOptional === true && mongooseProp.type && mongooseProp.required !== true) {
         mongooseProp.required = false;
     }
@@ -337,12 +570,30 @@ function extractMongooseDef(schema, visited = new Map()) {
     // Map Zod checks to Mongoose options
     mapZodChecksToMongoose(features.checks, mongooseProp);
     const def = unwrapped._def;
-    if (!def)
+    if (!def) {
+        callHookSync('converter:after', {
+            schema: schema,
+            mongooseProp,
+        });
         return mongooseProp;
+    }
     const { type } = def;
+    callHookSync('converter:node', {
+        schema: unwrapped,
+        mongooseProp,
+        type,
+    });
     // Handle recursion and specific types via separate handlers
     if (type === 'object') {
-        return handleObject(unwrapped, mongooseProp, visited, extractMongooseDef);
+        const result = handleObject(unwrapped, mongooseProp, visited, extractMongooseDef);
+        callHookSync('converter:after', {
+            schema: schema,
+            mongooseProp: result,
+        });
+        if (typeof result === 'object' && result !== null && !Array.isArray(result)) {
+            delete result.includeId;
+        }
+        return result;
     }
     if (type === 'array' || type === 'set' || type === 'tuple') {
         handleArray(unwrapped, mongooseProp, visited, extractMongooseDef);
@@ -441,6 +692,13 @@ function extractMongooseDef(schema, visited = new Map()) {
     if (!mongooseProp.type && type !== 'object') {
         mongooseProp.type = getMongoose()?.Schema.Types.Mixed || 'Mixed';
     }
+    callHookSync('converter:after', {
+        schema: schema,
+        mongooseProp,
+    });
+    if (typeof mongooseProp === 'object' && mongooseProp !== null && !Array.isArray(mongooseProp)) {
+        delete mongooseProp.includeId;
+    }
     return mongooseProp;
 }
 
@@ -454,6 +712,7 @@ function toMongooseSchema(schema, options) {
         schema.meta?.() ||
         unwrapped.meta?.() ||
         {};
+    const { plugins, ...schemaOptions } = options || {};
     const mergedOptions = {
         // Also merge other schema options from meta if they exist
         ...(meta.collection ? { collection: meta.collection } : {}),
@@ -469,14 +728,39 @@ function toMongooseSchema(schema, options) {
         ...(meta._id === undefined ? {} : { _id: meta._id }),
         ...(meta.timestamps ? { timestamps: meta.timestamps } : {}),
         ...(meta.discriminatorKey ? { discriminatorKey: meta.discriminatorKey } : {}),
-        ...options,
+        ...schemaOptions,
     };
-    const definition = extractMongooseDef(schema);
+    let definition = extractMongooseDef(schema);
+    // Strip internal includeId metadata that might have leaked into the definition
+    if (typeof definition === 'object' && definition !== null) {
+        // If it's a top-level object, it might have metadata fields directly
+        const { includeId, ...cleanDefinition } = definition;
+        definition = cleanDefinition;
+        // Also clean any top-level field definitions
+        for (const value of Object.values(definition)) {
+            if (value && typeof value === 'object' && !Array.isArray(value)) {
+                delete value.includeId;
+            }
+        }
+    }
     const mongoose = getMongoose();
     if (!mongoose) {
         throw new Error('Mongoose must be installed to use toMongooseSchema. If you are in an ESM environment, ensure mongoose is loaded.');
     }
-    return new mongoose.Schema(definition, mergedOptions);
+    const mongooseSchema = new mongoose.Schema(definition, mergedOptions);
+    // Apply plugins if provided in options
+    if (plugins && Array.isArray(plugins)) {
+        for (const plugin of plugins) {
+            mongooseSchema.plugin(plugin);
+        }
+    }
+    // Call schema:created hook
+    callHookSync('schema:created', {
+        schema,
+        mongooseSchema,
+        options: mergedOptions,
+    });
+    return mongooseSchema;
 }
 
 const zObjectId = (options) => {
@@ -548,10 +832,12 @@ const genTimestampsSchema = (createdAtField = 'createdAt', updatedAtField = 'upd
 const bufferMongooseGetter = (value) => value != null && value._bsontype === 'Binary' ? value.buffer : value;
 
 exports.bufferMongooseGetter = bufferMongooseGetter;
+exports.callHookSync = callHookSync;
 exports.extractMongooseDef = extractMongooseDef;
 exports.genTimestampsSchema = genTimestampsSchema;
 exports.getFrontendMode = getFrontendMode;
 exports.getMongoose = getMongoose;
+exports.hooks = hooks;
 exports.mongooseRegistry = mongooseRegistry;
 exports.setFrontendMode = setFrontendMode;
 exports.toMongooseSchema = toMongooseSchema;

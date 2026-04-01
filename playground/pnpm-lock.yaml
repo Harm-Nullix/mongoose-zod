@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@nullix/zod-mongoose':
+        specifier: file:..
+        version: file:..(mongoose@8.23.0)(zod@4.3.6)
       '@nuxt/ui':
         specifier: ^4.6.0
         version: 4.6.0(@tiptap/extensions@3.21.0(@tiptap/core@3.21.0(@tiptap/pm@3.21.0))(@tiptap/pm@3.21.0))(@tiptap/y-tiptap@3.0.2(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.7)(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30))(db0@0.3.4)(embla-carousel@8.6.0)(ioredis@5.10.1)(magicast@0.5.2)(tailwindcss@4.2.2)(typescript@6.0.2)(vite@7.3.1(@types/node@24.12.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(yaml@2.8.3))(vue-router@5.0.4(@vue/compiler-sfc@3.5.31)(vue@3.5.31(typescript@6.0.2)))(vue@3.5.31(typescript@6.0.2))(yjs@13.6.30)(zod@4.3.6)
@@ -29,9 +32,6 @@ importers:
       zod:
         specifier: ^4.3.6
         version: 4.3.6
-      zod-mongoose-v4:
-        specifier: file:..
-        version: file:..(mongoose@8.23.0)(zod@4.3.6)
     devDependencies:
       '@types/node':
         specifier: ^24.12.0
@@ -464,6 +464,16 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@nullix/zod-mongoose@file:..':
+    resolution: {directory: .., type: directory}
+    engines: {node: '>=24'}
+    peerDependencies:
+      mongoose: ^8.x
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      mongoose:
+        optional: true
 
   '@nuxt/cli@3.34.0':
     resolution: {integrity: sha512-KVI4xSo96UtUUbmxr9ouWTytbj1LzTw5alsM4vC/gSY/l8kPMRAlq0XpNSAVTDJyALzLY70WhaIMX24LJLpdFw==}
@@ -4353,16 +4363,6 @@ packages:
     resolution: {integrity: sha512-zK7YHHz4ZXpW89AHXUPbQVGKI7uvkd3hzusTdotCg1UxyaVtg0zFJSTfW/Dq5f7OBBVnq6cZIaC8Ti4hb6dtCA==}
     engines: {node: '>= 14'}
 
-  zod-mongoose-v4@file:..:
-    resolution: {directory: .., type: directory}
-    engines: {node: '>=24'}
-    peerDependencies:
-      mongoose: ^8.x
-      zod: ^3.25.0 || ^4.0.0
-    peerDependenciesMeta:
-      mongoose:
-        optional: true
-
   zod@4.3.6:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
@@ -4798,6 +4798,13 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
+
+  '@nullix/zod-mongoose@file:..(mongoose@8.23.0)(zod@4.3.6)':
+    dependencies:
+      hookable: 6.1.0
+      zod: 4.3.6
+    optionalDependencies:
+      mongoose: 8.23.0
 
   '@nuxt/cli@3.34.0(@nuxt/schema@4.4.2)(cac@6.7.14)(magicast@0.5.2)':
     dependencies:
@@ -9058,12 +9065,5 @@ snapshots:
       archiver-utils: 5.0.2
       compress-commons: 6.0.2
       readable-stream: 4.7.0
-
-  zod-mongoose-v4@file:..(mongoose@8.23.0)(zod@4.3.6):
-    dependencies:
-      hookable: 6.1.0
-      zod: 4.3.6
-    optionalDependencies:
-      mongoose: 8.23.0
 
   zod@4.3.6: {}

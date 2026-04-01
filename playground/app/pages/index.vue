@@ -4,7 +4,7 @@
       <div class="flex items-center justify-center gap-3 mb-4">
         <UIcon name="i-heroicons-bolt-20-solid" class="w-10 h-10 text-primary" />
         <h1 class="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-5xl">
-          Zod-Mongoose-V4
+          @nullix/zod-mongoose
         </h1>
       </div>
       <p class="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
@@ -13,6 +13,7 @@
       <div class="mt-6 flex justify-center gap-4">
         <UBadge color="primary" variant="soft" size="lg">Nuxt 4 Ready</UBadge>
         <UBadge color="neutral" variant="soft" size="lg">TypeScript Native</UBadge>
+        <UButton to="/showcase" size="sm" variant="link" icon="i-heroicons-beaker">View Complex Schemas</UButton>
       </div>
     </header>
 

@@ -1,6 +1,19 @@
 import mongoose from 'mongoose';
-import {toMongooseSchema} from 'zod-mongoose-v4';
-import {UserZodSchema, PostZodSchema, type User, type Post} from '#shared/schemas';
+import {toMongooseSchema} from '@nullix/zod-mongoose';
+import {
+  UserZodSchema,
+  PostZodSchema,
+  ActivityZodSchema,
+  SettingsZodSchema,
+  AssetZodSchema,
+  TaskZodSchema,
+  type User,
+  type Post,
+  type Activity,
+  type Settings,
+  type Asset,
+  type Task,
+} from '#shared/schemas';
 
 // Expose mongoose globally for the converter to find in ESM/Nitro environments
 (globalThis as any).mongoose = mongoose;
@@ -27,6 +40,28 @@ PostSchema.set('timestamps', true);
 
 export const PostModel =
   (mongoose.models.Post as mongoose.Model<Post>) || mongoose.model<Post>('Post', PostSchema);
+
+// Activity Model (Discriminator example)
+export const ActivitySchema = toMongooseSchema(ActivityZodSchema);
+export const ActivityModel =
+  (mongoose.models.Activity as mongoose.Model<Activity>) ||
+  mongoose.model<Activity>('Activity', ActivitySchema);
+
+// Settings Model (Tuple, Record, Map example)
+export const SettingsSchema = toMongooseSchema(SettingsZodSchema);
+export const SettingsModel =
+  (mongoose.models.Settings as mongoose.Model<Settings>) ||
+  mongoose.model<Settings>('Settings', SettingsSchema);
+
+// Asset Model (Buffer, Literal example)
+export const AssetSchema = toMongooseSchema(AssetZodSchema);
+export const AssetModel =
+  (mongoose.models.Asset as mongoose.Model<Asset>) || mongoose.model<Asset>('Asset', AssetSchema);
+
+// Task Model (Composite ID example)
+export const TaskSchema = toMongooseSchema(TaskZodSchema);
+export const TaskModel =
+  (mongoose.models.Task as mongoose.Model<Task>) || mongoose.model<Task>('Task', TaskSchema);
 
 const seedDB = async () => {
   const count = await UserModel.countDocuments();

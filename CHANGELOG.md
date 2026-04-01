@@ -1,7 +1,7 @@
 ## 0.2.0
 
-- Renamed package to `zod-mongoose-v4`.
-- Migrated to `harm-nullix/zod-mongoose-v4` repository.
+- Renamed package to `@nullix/zod-mongoose`.
+- Migrated to `harm-nullix/zod-mongoose` repository.
 - Full support for Zod v4 and Mongoose 8.
 - Added Hookable system for extensible conversion.
 - Added `PopulatedSchema` utility type.

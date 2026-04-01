@@ -6,7 +6,7 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
   vite: {
     optimizeDeps: {
-      include: ['zod/v4', 'zod-mongoose-v4'],
+      include: ['zod/v4', '@nullix/zod-mongoose'],
     },
   },
 });

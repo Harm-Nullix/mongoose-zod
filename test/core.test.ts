@@ -3,7 +3,7 @@ import {z} from 'zod/v4';
 import mongoose from 'mongoose';
 import {toMongooseSchema, withMongoose} from '../src/index.js';
 
-describe('zod-mongoose-v4 core', () => {
+describe('@nullix/zod-mongoose core', () => {
   test('should convert a simple zod object to mongoose schema', () => {
     const zodSchema = z.object({
       name: z.string(),

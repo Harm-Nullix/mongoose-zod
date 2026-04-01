@@ -8,7 +8,7 @@ const customValidator = (v: string) => v.length > 5;
 describe('Field-level withMongoose', () => {
   it('should handle field-level metadata like index and unique', () => {
     const schema = z.object({
-      email: withMongoose(z.string().email(), {unique: true, index: true}),
+      email: withMongoose(z.email(), {unique: true, index: true}),
       username: withMongoose(z.string(), {lowercase: true, trim: true, sparse: true}),
     });
 

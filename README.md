@@ -1,4 +1,4 @@
-# zod-mongoose-v4
+# @nullix/zod-mongoose
 
 A library which allows to author [mongoose](https://github.com/Automattic/mongoose) ("a MongoDB object modeling tool") schemas using [zod](https://github.com/colinhacks/zod) ("a TypeScript-first schema declaration and validation library").
 
@@ -13,7 +13,7 @@ This library aims to solve many of the aforementioned problems utilizing `zod` a
 
 ### Automatic Validation & Transformation Mapping
 
-`zod-mongoose-v4` automatically maps Zod's built-in validations and transformations to their corresponding Mongoose SchemaType options.
+`@nullix/zod-mongoose` automatically maps Zod's built-in validations and transformations to their corresponding Mongoose SchemaType options.
 
 | Zod Check | Mongoose Option | Target Types |
 | :--- | :--- | :--- |
@@ -92,7 +92,7 @@ The following Zod types are currently not explicitly handled or are unsupported 
 Install the package:
 
 ```shell
-pnpm add zod-mongoose-v4
+pnpm add @nullix/zod-mongoose
 ```
 
 ### Peer Dependencies
@@ -107,11 +107,11 @@ This package requires `zod` (^4.x). Note that `zod` imports should be from `zod/
 
 ```typescript
 import { z } from 'zod/v4';
-import { toMongooseSchema } from 'zod-mongoose-v4';
+import { toMongooseSchema } from '@nullix/zod-mongoose';
 
 const zodSchema = z.object({
   username: z.string().min(3),
-  email: z.string().email(),
+  email: z.email(),
   age: z.number().optional(),
 });
 
@@ -125,7 +125,7 @@ You can pass Mongoose plugins directly to `toMongooseSchema`. This is the recomm
 
 ```typescript
 import { z } from 'zod/v4';
-import { toMongooseSchema } from 'zod-mongoose-v4';
+import { toMongooseSchema } from '@nullix/zod-mongoose';
 import mongooseLeanVirtuals from 'mongoose-lean-virtuals';
 
 const zodSchema = z.object({
@@ -147,7 +147,7 @@ const doc = await Post.findOne().lean({ virtuals: true });
 For more advanced extensions, use the `schema:created` hook to modify the `mongoose.Schema` instance immediately after it is created.
 
 ```typescript
-import { hooks } from 'zod-mongoose-v4';
+import { hooks } from '@nullix/zod-mongoose';
 
 hooks.hook('schema:created', ({ schema, zodSchema }) => {
   // Add a virtual field to all schemas that have a 'title'
@@ -165,7 +165,7 @@ Use `withMongoose` to add Mongoose-specific field options like `unique`, `index`
 
 ```typescript
 import { z } from 'zod/v4';
-import { toMongooseSchema, withMongoose } from 'zod-mongoose-v4';
+import { toMongooseSchema, withMongoose } from '@nullix/zod-mongoose';
 
 const zodSchema = z.object({
   username: withMongoose(z.string(), { 
@@ -186,7 +186,7 @@ The `genTimestampsSchema` helper simplifies creating Mongoose-compatible Zod sch
 
 ```typescript
 import { z } from 'zod/v4';
-import { toMongooseSchema, genTimestampsSchema, withMongoose } from 'zod-mongoose-v4';
+import { toMongooseSchema, genTimestampsSchema, withMongoose } from '@nullix/zod-mongoose';
 
 const userSchema = withMongoose(
   z.object({
@@ -206,7 +206,7 @@ When using Mongoose discriminators, you can define the `discriminatorKey` in the
 
 ```typescript
 import { z } from 'zod/v4';
-import { toMongooseSchema, withMongoose } from 'zod-mongoose-v4';
+import { toMongooseSchema, withMongoose } from '@nullix/zod-mongoose';
 
 const baseSchema = withMongoose(
   z.object({
@@ -284,7 +284,7 @@ For specialized Mongoose types, use the provided `zObjectId()` and `zBuffer()` h
 
 ```typescript
 import { z } from 'zod/v4';
-import { toMongooseSchema, zObjectId, zBuffer } from 'zod-mongoose-v4';
+import { toMongooseSchema, zObjectId, zBuffer } from '@nullix/zod-mongoose';
 
 const schema = z.object({
   avatar: zBuffer({ required: true }),
@@ -330,7 +330,7 @@ TypeScript utility type to extract the populated object type from a `zPopulated`
 - `K`: The key(s) to populate.
 
 ```typescript
-import { PopulatedSchema } from 'zod-mongoose-v4';
+import { PopulatedSchema } from '@nullix/zod-mongoose';
 
 type FullPost = PopulatedSchema<z.infer<typeof PostSchema>, 'author'>;
 ```
@@ -371,12 +371,12 @@ Returns a Zod object with timestamp fields.
 
 ## Hooks
 
-`zod-mongoose-v4` uses `unjs/hookable` to provide an extensible conversion process. Developers can register hooks to modify the Mongoose definition at any point of the conversion.
+`@nullix/zod-mongoose` uses `unjs/hookable` to provide an extensible conversion process. Developers can register hooks to modify the Mongoose definition at any point of the conversion.
 
 ### Registering Hooks
 
 ```typescript
-import { hooks } from 'zod-mongoose-v4';
+import { hooks } from '@nullix/zod-mongoose';
 
 // Modify every string field to be uppercase
 hooks.hook('converter:node', (context) => {

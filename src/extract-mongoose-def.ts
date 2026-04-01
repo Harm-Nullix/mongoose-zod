@@ -130,6 +130,9 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
       schema: schema as z.ZodTypeAny,
       mongooseProp: result,
     });
+    if (typeof result === 'object' && result !== null && !Array.isArray(result)) {
+      delete result.includeId;
+    }
     return result;
   }
 
@@ -240,6 +243,10 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
     schema: schema as z.ZodTypeAny,
     mongooseProp,
   });
+
+  if (typeof mongooseProp === 'object' && mongooseProp !== null && !Array.isArray(mongooseProp)) {
+    delete mongooseProp.includeId;
+  }
 
   return mongooseProp;
 }
