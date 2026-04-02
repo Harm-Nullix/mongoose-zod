@@ -111,7 +111,9 @@ export function handleArray(
 
     // Transfer any metadata from the inner type (like 'ref') to the array definition
     if (typeof innerDef === 'object') {
-      Object.assign(mongooseProp, innerDef);
+      // eslint-disable-next-line sonarjs/no-unused-vars
+      const {type: _extractedType, ...innerMeta} = innerDef;
+      Object.assign(mongooseProp, innerMeta);
       mongooseProp.type = [innerType]; // Restore type as array
     }
   }
@@ -137,7 +139,8 @@ export function handleRecord(
   let innerDef: any;
   if (!mongooseProp.type || mongooseProp.type === Map) {
     mongooseProp.type = Map;
-    const finalValueType = valueType || (unwrapped as any).valueSchema || (unwrapped as any)._def?.valueSchema;
+    const finalValueType =
+      valueType || (unwrapped as any).valueSchema || (unwrapped as any)._def?.valueSchema;
     if (finalValueType) {
       innerDef = extractMongooseDef(finalValueType, visited);
       mongooseProp.of = (innerDef as any).type || innerDef;

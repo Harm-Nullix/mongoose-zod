@@ -34,10 +34,10 @@
             <p class="text-sm text-gray-500 mt-1">Share your thoughts with the community.</p>
           </template>
 
-          <UForm :schema="PostInputSchema" :state="state" class="space-y-6" @submit="onSubmit">
+          <UForm :schema="PostInputSchema" :state="state.form" class="space-y-6" @submit="onSubmit">
             <UFormField label="Author" name="author" help="Who is writing this post?">
               <USelectMenu
-                v-model="state.author"
+                v-model="state.form.author"
                 :items="users"
                 placeholder="Select an author"
                 value-key="_id"
@@ -50,7 +50,7 @@
 
             <UFormField label="Title" name="title">
               <UInput
-                v-model="state.title"
+                v-model="state.form.title"
                 placeholder="Enter a catchy title..."
                 class="w-full"
                 icon="i-heroicons-h1"
@@ -59,7 +59,7 @@
 
             <UFormField label="Content" name="content">
               <UTextarea
-                v-model="state.content"
+                v-model="state.form.content"
                 placeholder="What's on your mind?"
                 class="w-full"
                 :rows="5"
@@ -69,7 +69,7 @@
 
             <UFormField label="Mentions" name="mentions" help="Tag other users in your post.">
               <USelectMenu
-                v-model="state.mentions"
+                v-model="state.form.mentions"
                 :items="users"
                 placeholder="Tag users..."
                 multiple
@@ -215,10 +215,12 @@ import type {FormSubmitEvent} from '@nuxt/ui';
 const router = useRouter();
 
 const state = reactive({
-  title: '',
-  content: '',
-  author: undefined as string | undefined,
-  mentions: [] as string[],
+  form: {
+    title: '',
+    content: '',
+    author: undefined as string | undefined,
+    mentions: [] as string[],
+  },
 });
 
 const loading = ref(false);
@@ -232,10 +234,10 @@ const {data: users} = await useFetch<User[]>('/api/users', {
 watch(
   users,
   (newUsers) => {
-    if (newUsers && newUsers.length > 0 && !state.author) {
+    if (newUsers && newUsers.length > 0 && !state.form.author) {
       const firstUser = newUsers[0];
       if (firstUser && firstUser._id) {
-        state.author = String(firstUser._id);
+        state.form.author = String(firstUser._id);
       }
     }
   },
@@ -260,9 +262,9 @@ const onSubmit = async (event: FormSubmitEvent<any>) => {
     });
 
     // Reset state (keep same author)
-    state.title = '';
-    state.content = '';
-    state.mentions = [];
+    state.form.title = '';
+    state.form.content = '';
+    state.form.mentions = [];
 
     await refresh();
   } catch (err) {

@@ -73,11 +73,13 @@ const seedDB = async () => {
           username: 'alice',
           email: 'alice@example.com',
           fullName: 'Alice Wonder',
+          contact: {type: 'phone', phoneNumber: '555-0123'},
         },
         {
           username: 'bob',
           email: 'bob@example.com',
           fullName: 'Bob Builder',
+          contact: {type: 'slack', slackId: 'U12345678'},
         },
         {
           username: 'charlie',

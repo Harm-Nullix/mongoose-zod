@@ -308,21 +308,33 @@ export function extractMongooseDef<T extends z.ZodTypeAny>(
       mongooseProp.type = mongoose?.Schema.Types.Mixed || 'Mixed';
       if (
         isField &&
-        (unionCtx.isXor ||
+        (type === 'xor' ||
           type === 'discriminated_union' ||
           type === 'discriminatedunion' ||
-          type === 'union')
+          type === 'union') &&
+        !mongooseProp.ref && // Skip Zod validation for populated fields
+        !Array.isArray(mongooseProp.type) && // Skip Zod validation for arrays
+        mongooseProp.type !== Map && // Skip Zod validation for maps
+        !mongooseProp.of // Skip Zod validation for collections
       ) {
         mongooseProp.validate = {
           validator(v: any) {
             try {
               (schema as any).parse(v);
               return true;
-            } catch {
+            } catch (err) {
               return false;
             }
           },
-          message: unionCtx.isXor ? 'XOR validation failed' : 'Union validation failed',
+          message: (props: any) => {
+            if (unionCtx.isXor) return 'XOR validation failed';
+            try {
+              (schema as any).parse(props.value);
+            } catch (err: any) {
+              return `Union validation failed: ${err.message}`;
+            }
+            return 'Union validation failed';
+          },
         };
       }
     }

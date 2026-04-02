@@ -20,6 +20,11 @@ export const UserZodSchema = z
       z.object({bio: z.string().optional()}),
       z.object({website: z.url().optional()}),
     ),
+    // XOR example
+    contact: z.xor([
+      z.object({type: z.literal('phone'), phoneNumber: z.string()}),
+      z.object({type: z.literal('slack'), slackId: z.string()}),
+    ]).optional(),
   })
   .describe('User');
 

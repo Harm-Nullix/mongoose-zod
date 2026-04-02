@@ -13,7 +13,7 @@
     </header>
 
     <div class="space-y-12">
-      <!-- User Section (Unique, Lowercase, Intersection) -->
+      <!-- User Section (Unique, Lowercase, Intersection, XOR) -->
       <section>
         <div class="flex items-center gap-2 mb-4">
           <UIcon name="i-heroicons-user-group" class="w-6 h-6 text-primary" />
@@ -23,13 +23,14 @@
           <template #header>
             <div class="flex justify-between items-center">
               <span class="font-semibold">Constraints & Intersections</span>
-              <UBadge color="primary" variant="soft">Unique, Lowercase, Intersection</UBadge>
+              <UBadge color="primary" variant="soft">Unique, Lowercase, Intersection, XOR</UBadge>
             </div>
           </template>
           <div class="space-y-4">
             <p class="text-sm text-gray-500">
               Usernames and emails are now <code>unique</code> and <code>lowercase</code> at the database level.
               The <code>profile</code> field is an <code>intersection</code> of two Zod objects.
+              The <code>contact</code> field is an <code>XOR</code> union.
             </p>
             <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
               <pre class="text-xs text-green-400"><code>{{ JSON.stringify(users?.[0], null, 2) }}</code></pre>
