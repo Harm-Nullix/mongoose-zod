@@ -74,13 +74,14 @@ The following table shows how Zod types are mapped to Mongoose types by default.
 | `z.map()` | `Map` | Mapped to a Mongoose `Map` with `of` type. |
 | `z.object()` | `Nested Object` | Mapped to a nested Mongoose schema or subdocument. |
 | `z.intersection()` | `Nested Object` | Merges the definitions of both branches into a single object. |
+| `z.union()` | `Schema.Types.Union` (primitives) or `Nested Object` (objects) | Mapped to `Union` for primitives, merged into an object for `z.object()` unions. Others fallback to `Mixed`. |
+| `z.xor()` | `mongoose.Schema.Types.Mixed` | Non-inclusive union. Maps to `Mixed` with a custom Zod-based validator to enforce mutual exclusivity. |
+| `z.discriminatedUnion()` | `Mongoose Discriminator` | Maps to native Mongoose discriminators. Common fields are automatically moved to the base schema. |
 | `zObjectId()` | `mongoose.Schema.Types.ObjectId` | Specialized helper for ObjectIds. By default, it is omitted from the generated Mongoose schema to let Mongoose handle its auto-generation. |
 | `zBuffer()` | `mongoose.Schema.Types.Buffer` | Specialized helper for Buffers. |
 | `zPopulated()` | `mongoose.Schema.Types.ObjectId` | Helper for fields that can be either an `ObjectId` or a populated object. |
 | `z.instanceof(Buffer)` | `mongoose.Schema.Types.Buffer` | |
 | `z.instanceof(ObjectId)` | `mongoose.Schema.Types.ObjectId` | |
-| `z.union()` | `Schema.Types.Union` (primitives) or `Nested Object` (objects) | Mapped to `Union` for primitives, merged into an object for `z.object()` unions. Others fallback to `Mixed`. |
-| `z.discriminatedUnion()` | `Schema.Types.Union` (primitives) or `Nested Object` (objects) | Mapped to `Union` for primitives, merged into an object for `z.object()` unions. Others fallback to `Mixed`. |
 | `z.literal()` | `String` / `Number` / `Boolean` | Mapped to the literal's type with a Mongoose `enum` constraint. |
 | `z.any()` / `z.unknown()` | `mongoose.Schema.Types.Mixed` | Fallback for unhandled types. |
 
@@ -212,7 +213,39 @@ const mongooseSchema = toMongooseSchema(userSchema);
 
 ### Discriminators
 
-When using Mongoose discriminators, you can define the `discriminatorKey` in the base schema's metadata. To ensure type safety in TypeScript, it is recommended to also include the discriminator key field in your Zod schema.
+#### 1. Native Mongoose Discriminators (Recommended)
+
+When using `z.discriminatedUnion()`, the library automatically maps it to native Mongoose discriminators. This provides the most robust way to handle polymorphic data in Mongoose, including proper indexing and query support.
+
+Common fields (fields present in all union branches) are automatically extracted and moved to the base schema.
+
+```typescript
+import { z } from 'zod/v4';
+import { toMongooseSchema } from '@nullix/zod-mongoose';
+
+const ActivityZodSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('login'),
+    timestamp: z.date(),
+    ip: z.string()
+  }),
+  z.object({
+    type: z.literal('post_create'),
+    timestamp: z.date(),
+    postId: zObjectId()
+  }),
+]);
+
+const ActivitySchema = toMongooseSchema(ActivityZodSchema);
+// Mongoose will create a base schema with 'timestamp' field
+// and two discriminators ('login', 'post_create') for the other fields.
+
+const ActivityModel = mongoose.model('Activity', ActivitySchema);
+```
+
+#### 2. Manual Discriminators
+
+If you prefer to define discriminators manually on a base model, you can define the `discriminatorKey` in the base schema's metadata.
 
 ```typescript
 import { z } from 'zod/v4';
@@ -234,9 +267,19 @@ const carSchema = z.object({
 });
 
 const CarModel = BaseModel.discriminator('Car', toMongooseSchema(carSchema));
+```
 
-const car = new CarModel({ name: 'My Car', type: 'Car', licensePlate: 'ABC-123' });
-console.log(car.type); // 'Car' (type-safe)
+### Non-Inclusive Unions (XOR)
+
+Use `z.xor()` for unions where exactly one option must match. This is mapped to `Schema.Types.Mixed` with a custom Zod validator that enforces mutual exclusivity at the database level.
+
+```typescript
+const paymentSchema = z.xor([
+  z.object({ type: z.literal('card'), cardNumber: z.string() }),
+  z.object({ type: z.literal('bank'), accountNumber: z.string() }),
+]);
+
+const mongooseSchema = toMongooseSchema(z.object({ payment: paymentSchema }));
 ```
 
 ### ObjectIds and `_id` Handling

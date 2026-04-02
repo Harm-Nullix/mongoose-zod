@@ -64,31 +64,78 @@ describe('README Examples', () => {
     expect(mongooseSchema.path('updatedAt').instance).toBe('Date');
   });
 
-  test('Discriminators', () => {
-    const baseSchema = withMongoose(
-      z.object({
-        name: z.string(),
-        // Include the discriminator key in the Zod schema for type-safe access
-        type: z.string().optional(),
-      }),
-      {discriminatorKey: 'type'},
-    );
+  describe('Discriminators', () => {
+    test('1. Native Mongoose Discriminators', () => {
+      const ActivityZodSchema = z.discriminatedUnion('type', [
+        z.object({
+          type: z.literal('login'),
+          timestamp: z.date(),
+          ip: z.string(),
+        }),
+        z.object({
+          type: z.literal('post_create'),
+          timestamp: z.date(),
+          postId: zObjectId(),
+        }),
+      ]);
 
-    const mongooseSchema = toMongooseSchema(baseSchema);
-    expect((mongooseSchema.options as any).discriminatorKey).toBe('type');
+      const ActivitySchema = toMongooseSchema(ActivityZodSchema);
+      // Mongoose will create a base schema with 'timestamp' field
+      // and two discriminators ('login', 'post_create') for the other fields.
 
-    // Test actual discriminator functionality if possible without a real DB
-    const BaseModel = mongoose.model('BaseReadme', mongooseSchema);
+      expect(ActivitySchema.path('timestamp')).toBeDefined();
+      expect(ActivitySchema.path('timestamp').instance).toBe('Date');
+      expect(ActivitySchema.path('type')).toBeDefined();
 
-    const carSchema = z.object({
-      licensePlate: z.string(),
+      const ActivityModel = mongoose.model('ActivityReadme', ActivitySchema);
+      expect(ActivityModel.discriminators).toBeDefined();
+      expect(ActivityModel.discriminators?.login).toBeDefined();
+      expect(ActivityModel.discriminators?.post_create).toBeDefined();
     });
 
-    const CarModel = BaseModel.discriminator('Car', toMongooseSchema(carSchema));
+    test('2. Manual Discriminators', () => {
+      const baseSchema = withMongoose(
+        z.object({
+          name: z.string(),
+          // Include the discriminator key in the Zod schema for type-safe access
+          type: z.string().optional(),
+        }),
+        {discriminatorKey: 'type'},
+      );
 
-    const car = new CarModel({name: 'My Car', type: 'Car', licensePlate: 'ABC-123'}) as any;
-    expect(car.type).toBe('Car');
-    expect(car.licensePlate).toBe('ABC-123');
+      const mongooseSchema = toMongooseSchema(baseSchema);
+      expect((mongooseSchema.options as any).discriminatorKey).toBe('type');
+
+      const BaseModel = mongoose.model('BaseReadme', mongooseSchema);
+
+      const carSchema = z.object({
+        licensePlate: z.string(),
+      });
+
+      const CarModel = BaseModel.discriminator('Car', toMongooseSchema(carSchema));
+
+      const car = new CarModel({name: 'My Car', type: 'Car', licensePlate: 'ABC-123'}) as any;
+      expect(car.type).toBe('Car');
+      expect(car.licensePlate).toBe('ABC-123');
+    });
+  });
+
+  test('Non-Inclusive Unions (XOR)', () => {
+    // z.xor is available in Zod v4 (which we are using via import from zod/v4)
+    // For the test, we can use a helper or check if it exists
+    if (!('xor' in z)) {
+      return;
+    }
+
+    const paymentSchema = (z as any).xor([
+      z.object({type: z.literal('card'), cardNumber: z.string()}),
+      z.object({type: z.literal('bank'), accountNumber: z.string()}),
+    ]);
+
+    const mongooseSchema = toMongooseSchema(z.object({payment: paymentSchema}));
+    const paymentPath = mongooseSchema.path('payment');
+    expect(paymentPath.instance).toBe('Mixed');
+    expect((paymentPath as any).validators.length).toBeGreaterThan(0);
   });
 
   test('ObjectIds and _id Handling - Standard Usage', () => {
