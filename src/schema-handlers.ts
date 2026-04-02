@@ -39,7 +39,25 @@ export function handleObject(
       }
     }
     const def = extractMongooseDef(shape[key], visited);
-    if (typeof def === 'object' && def !== null && !Array.isArray(def)) {
+    if (def && typeof def === 'object' && def.__isDiscriminatorUnion) {
+      const mongoose = getMongoose();
+      if (mongoose) {
+        const baseSchema = new mongoose.Schema(def.baseDef, {
+          discriminatorKey: def.discriminatorKey,
+          _id: false,
+        });
+        const discriminators: Record<string, any> = {};
+        for (const [dKey, dDef] of Object.entries(def.discriminators)) {
+          discriminators[dKey] = new mongoose.Schema(dDef as any, {_id: false});
+        }
+        objDef[key] = {
+          type: baseSchema,
+          discriminators,
+        };
+      } else {
+        objDef[key] = def;
+      }
+    } else if (typeof def === 'object' && def !== null && !Array.isArray(def)) {
       const {includeId, ...cleanDef} = def;
       objDef[key] = cleanDef;
     } else {
@@ -106,15 +124,37 @@ export function handleArray(
 
   // If no explicit type override, wrap the inner definition in an array
   if (!mongooseProp.type) {
-    const innerType = (innerDef as any).type || innerDef;
-    mongooseProp.type = [innerType];
+    if (innerDef && typeof innerDef === 'object' && innerDef.__isDiscriminatorUnion && mongoose) {
+      // const baseSchema =
+      // new mongoose.Schema(innerDef.baseDef, {
+      //   discriminatorKey: innerDef.discriminatorKey,
+      //   _id: false,
+      // });
+      const discriminators: Record<string, any> = {};
+      for (const [dKey, dDef] of Object.entries(innerDef.discriminators)) {
+        discriminators[dKey] = new mongoose.Schema(dDef as any, {_id: false});
+      }
+      mongooseProp.type = [
+        new mongoose.Schema(
+          {},
+          {
+            discriminatorKey: innerDef.discriminatorKey,
+            _id: false,
+          },
+        ),
+      ];
+      mongooseProp.discriminators = discriminators;
+    } else {
+      const innerType = (innerDef as any).type || innerDef;
+      mongooseProp.type = [innerType];
 
-    // Transfer any metadata from the inner type (like 'ref') to the array definition
-    if (typeof innerDef === 'object') {
-      // eslint-disable-next-line sonarjs/no-unused-vars
-      const {type: _extractedType, ...innerMeta} = innerDef;
-      Object.assign(mongooseProp, innerMeta);
-      mongooseProp.type = [innerType]; // Restore type as array
+      // Transfer any metadata from the inner type (like 'ref') to the array definition
+      if (typeof innerDef === 'object') {
+        // eslint-disable-next-line sonarjs/no-unused-vars
+        const {type: _extractedType, ...innerMeta} = innerDef;
+        Object.assign(mongooseProp, innerMeta);
+        mongooseProp.type = [innerType]; // Restore type as array
+      }
     }
   }
   callHookSync('schema:array:after', {schema: unwrapped, mongooseProp, innerDef});

@@ -1,6 +1,6 @@
 import {z} from 'zod/v4';
 import type mongoose from 'mongoose';
-import type {SchemaDefinition, SchemaOptions} from 'mongoose';
+import type {SchemaOptions} from 'mongoose';
 import {mongooseRegistry} from './registry.js';
 import {unwrapZodSchema} from './zod-helpers.js';
 import {getMongoose} from './config.js';
@@ -29,7 +29,7 @@ export function toMongooseSchema<T extends z.ZodTypeAny>(
     (unwrapped as any).meta?.() ||
     {};
 
-  const { plugins, ...schemaOptions } = options || {};
+  const {plugins, ...schemaOptions} = options || {};
 
   const mergedOptions: SchemaOptions = {
     // Also merge other schema options from meta if they exist
@@ -49,21 +49,7 @@ export function toMongooseSchema<T extends z.ZodTypeAny>(
     ...schemaOptions,
   };
 
-  let definition = extractMongooseDef(schema, new Map(), false) as unknown as SchemaDefinition;
-
-  // Strip internal includeId metadata that might have leaked into the definition
-  if (typeof definition === 'object' && definition !== null) {
-    // If it's a top-level object, it might have metadata fields directly
-    const {includeId, ...cleanDefinition} = definition as any;
-    definition = cleanDefinition;
-
-    // Also clean any top-level field definitions
-    for (const value of Object.values(definition)) {
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
-        delete (value as any).includeId;
-      }
-    }
-  }
+  let definition = extractMongooseDef(schema, new Map(), false) as any;
 
   const mongoose = getMongoose();
 
@@ -73,7 +59,45 @@ export function toMongooseSchema<T extends z.ZodTypeAny>(
     );
   }
 
-  const mongooseSchema = new mongoose.Schema(definition, mergedOptions);
+  let mongooseSchema: mongoose.Schema;
+
+  if (definition && typeof definition === 'object' && definition.__isDiscriminatorUnion) {
+    const {discriminatorKey, discriminators, baseDef, validate} = definition;
+    mongooseSchema = new mongoose.Schema(baseDef, {
+      ...mergedOptions,
+      discriminatorKey,
+    });
+
+    if (validate) {
+      if (!mongooseSchema.path(discriminatorKey)) {
+        mongooseSchema.add({[discriminatorKey]: {type: String}});
+      }
+      mongooseSchema.path(discriminatorKey).validate(validate);
+    }
+
+    for (const [key, dDef] of Object.entries(discriminators)) {
+      if (mongooseSchema.discriminators && mongooseSchema.discriminators[key]) {
+        continue;
+      }
+      mongooseSchema.discriminator(key, new mongoose.Schema(dDef as any, {_id: false}));
+    }
+  } else {
+    // Strip internal includeId metadata that might have leaked into the definition
+    if (typeof definition === 'object' && definition !== null) {
+      // If it's a top-level object, it might have metadata fields directly
+      const {includeId, ...cleanDefinition} = definition as any;
+      definition = cleanDefinition;
+
+      // Also clean any top-level field definitions
+      for (const value of Object.values(definition)) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          delete (value as any).includeId;
+        }
+      }
+    }
+
+    mongooseSchema = new mongoose.Schema(definition, mergedOptions);
+  }
 
   // Apply plugins if provided in options
   if (plugins && Array.isArray(plugins)) {

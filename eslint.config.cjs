@@ -30,6 +30,7 @@ module.exports = defineConfig([
     '**/oldSrc',
     '**/playground/.nuxt',
     '**/playground/.output',
+    '**/playground/server/models/index.ts',
   ]),
   js.configs.recommended,
   sonarjs.configs.recommended,

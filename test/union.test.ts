@@ -23,24 +23,27 @@ describe('Zod Union to Mongoose Union', () => {
   test('should map complex union to its constituent fields', () => {
     const schema = z.object({
       activity: z.discriminatedUnion('type', [
-        z.object({ type: z.literal('run'), distance: z.number() }),
-        z.object({ type: z.literal('swim'), laps: z.number() }),
+        z.object({type: z.literal('run'), distance: z.number()}),
+        z.object({type: z.literal('swim'), laps: z.number()}),
       ]),
     });
 
     const mongooseSchema = toMongooseSchema(schema);
-    const typePath = mongooseSchema.path('activity.type') as any;
-    const distancePath = mongooseSchema.path('activity.distance') as any;
-    const lapsPath = mongooseSchema.path('activity.laps') as any;
+    const activityPath = mongooseSchema.path('activity') as any;
 
-    expect(typePath.instance).toBe('Mixed');
-    expect(distancePath.instance).toBe('Number');
-    expect(lapsPath.instance).toBe('Number');
+    expect(activityPath.instance).toBe('Embedded');
+    expect(activityPath.schema.options.discriminatorKey).toBe('type');
+    expect(activityPath.schema.discriminators).toHaveProperty('run');
+    expect(activityPath.schema.discriminators).toHaveProperty('swim');
 
-    // Ensure all union members are optional in the final schema
-    expect(typePath.options.required).toBe(false);
-    expect(distancePath.options.required).toBe(false);
-    expect(lapsPath.options.required).toBe(false);
+    const runSchema = activityPath.schema.discriminators.run;
+    expect(runSchema.path('distance').instance).toBe('Number');
+    // Literal might be String or Mixed depending on implementation details
+    expect(['String', 'Mixed']).toContain(runSchema.path('type').instance);
+
+    const swimSchema = activityPath.schema.discriminators.swim;
+    expect(swimSchema.path('laps').instance).toBe('Number');
+    expect(['String', 'Mixed']).toContain(swimSchema.path('type').instance);
   });
 
   test('should correctly validate data against Mongoose Union', async () => {

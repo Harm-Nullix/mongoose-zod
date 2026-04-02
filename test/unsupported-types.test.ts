@@ -23,16 +23,19 @@ describe('Improved Types behavior', () => {
     expect(def.of[1]).toBe(Number);
   });
 
-  test('z.discriminatedUnion should merge object definitions', () => {
+  test('z.discriminatedUnion should return structured POJO for discriminators', () => {
     const schema = z.discriminatedUnion('type', [
-      z.object({ type: z.literal('a'), a: z.string() }),
-      z.object({ type: z.literal('b'), b: z.number() }),
+      z.object({type: z.literal('a'), a: z.string()}),
+      z.object({type: z.literal('b'), b: z.number()}),
     ]);
     const def = extractMongooseDef(schema) as any;
-    // def itself is the mongooseProp, which has the merged fields
-    expect(def.a.type).toBe(String);
-    expect(def.b.type).toBe(Number);
-    expect(def.type.type).toBe(mongoose.Schema.Types.Mixed); // The 'type' field is literal -> Mixed
+    expect(def.__isDiscriminatorUnion).toBe(true);
+    expect(def.discriminatorKey).toBe('type');
+    expect(def.discriminators).toHaveProperty('a');
+    expect(def.discriminators).toHaveProperty('b');
+
+    expect(def.discriminators.a.a.type).toBe(String);
+    expect(def.discriminators.b.b.type).toBe(Number);
   });
 
   test('z.record should map to Mongoose Map', () => {

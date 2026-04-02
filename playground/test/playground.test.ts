@@ -93,7 +93,6 @@ describe('Playground Integration', () => {
       expect(post.title).toBe('Valid Post Title');
     } catch (error: any) {
       if (error.errors?.mentions) {
-        console.warn('Skipping mentions validation check due to known Mixed array limitation');
         // Create without mentions to allow population check
         post = await PostModel.create({
           title: 'Valid Post Title',

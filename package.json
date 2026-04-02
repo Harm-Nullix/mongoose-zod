@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0-rc.1",
+  "version": "0.3.0-rc.1",
   "name": "@nullix/zod-mongoose",
   "description": "Create Mongoose schemas using Zod v4.",
   "scripts": {

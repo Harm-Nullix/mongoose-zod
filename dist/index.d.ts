@@ -35,7 +35,7 @@ type ToMongooseType<T extends z.ZodTypeAny> = T extends z.ZodObject<infer Shape>
  * THE CONVERTER (Safe AST Walker)
  * We extract the Zod type and merge it with any registered Mongoose metadata.
  */
-declare function extractMongooseDef<T extends z.ZodTypeAny>(schema: T, visited?: Map<z.ZodTypeAny, any>): ToMongooseType<T> & Record<string, any>;
+declare function extractMongooseDef<T extends z.ZodTypeAny>(schema: T, visited?: Map<z.ZodTypeAny, any>, isField?: boolean): ToMongooseType<T> & Record<string, any>;
 
 interface ToMongooseSchemaOptions extends SchemaOptions {
     plugins?: Array<(schema: mongoose.Schema, options?: any) => void>;
@@ -49,9 +49,7 @@ type StringLiteral<T> = T extends string ? (string extends T ? never : T) : neve
 declare const zObjectId: (options?: MongooseMeta) => z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodString> | z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodCustom<mongoose.Types.ObjectId, mongoose.Types.ObjectId>>;
 declare const zBuffer: (options?: MongooseMeta) => z.ZodCustom<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> | z.ZodCustom<Buffer<ArrayBufferLike>, Buffer<ArrayBufferLike>>;
 declare const zPopulated: <T extends z.ZodTypeAny>(ref: string, schema: T, options?: MongooseMeta) => z.ZodUnion<readonly [z.ZodString | z.ZodCustom<mongoose.Types.ObjectId, mongoose.Types.ObjectId>, T]>;
-declare const genTimestampsSchema: <CrAt = "createdAt", UpAt = "updatedAt">(createdAtField?: StringLiteral<CrAt | "createdAt"> | null, updatedAtField?: StringLiteral<UpAt | "updatedAt"> | null) => z.ZodObject<{
-    [x: string]: any;
-}, z.core.$strip>;
+declare const genTimestampsSchema: <CrAt = "createdAt", UpAt = "updatedAt">(createdAtField?: StringLiteral<CrAt | "createdAt"> | null, updatedAtField?: StringLiteral<UpAt | "updatedAt"> | null) => any;
 /**
  * Utility type to extract the populated object type from a Zod schema field
  * that uses `zPopulated`. It excludes string and ObjectId from the union,
@@ -163,6 +161,30 @@ interface MongooseZodHooks {
         schema: z.ZodRecord<any, any> | z.ZodMap<any, any>;
         mongooseProp: any;
         innerDef: any;
+    }) => void;
+    /**
+     * Called when a ZodUnion/DiscriminatedUnion is about to be processed.
+     */
+    'schema:union:before': (context: {
+        schema: z.ZodUnion<any> | z.ZodDiscriminatedUnion<any, any>;
+        mongooseProp: any;
+        ctx: {
+            isSimpleUnion: boolean;
+            isObjectUnion: boolean;
+            isXor: boolean;
+        };
+    }) => void;
+    /**
+     * Called after a ZodUnion/DiscriminatedUnion has been processed.
+     */
+    'schema:union:after': (context: {
+        schema: z.ZodUnion<any> | z.ZodDiscriminatedUnion<any, any>;
+        mongooseProp: any;
+        ctx: {
+            isSimpleUnion: boolean;
+            isObjectUnion: boolean;
+            isXor: boolean;
+        };
     }) => void;
     /**
      * Called after the conversion of a Zod schema is complete.

@@ -374,6 +374,17 @@ function mapZodChecksToMongoose(checks, mongooseProp) {
         if (traitSet.has('$ZodCheckRegex')) {
             mongooseProp.match = checkDef.pattern;
         }
+        // UUID
+        if (traitSet.has('$ZodUUID')) {
+            const mongoose = globalThis.mongoose || globalThis.__mongoose;
+            if (mongoose?.Schema.Types.UUID) {
+                mongooseProp.type = mongoose.Schema.Types.UUID;
+            }
+        }
+        // ISO Formats
+        if (traitSet.has('$ZodISODateTime') || traitSet.has('$ZodISODate')) {
+            mongooseProp.type = Date;
+        }
         // String Transforms (trim, lowercase, uppercase)
         if (traitSet.has('$ZodCheckOverwrite') && typeof checkDef.tx === 'function') {
             const txStr = checkDef.tx.toString();
@@ -417,7 +428,27 @@ function handleObject(unwrapped, mongooseProp, visited, extractMongooseDef) {
             }
         }
         const def = extractMongooseDef(shape[key], visited);
-        if (typeof def === 'object' && def !== null && !Array.isArray(def)) {
+        if (def && typeof def === 'object' && def.__isDiscriminatorUnion) {
+            const mongoose = getMongoose();
+            if (mongoose) {
+                const baseSchema = new mongoose.Schema(def.baseDef, {
+                    discriminatorKey: def.discriminatorKey,
+                    _id: false,
+                });
+                const discriminators = {};
+                for (const [dKey, dDef] of Object.entries(def.discriminators)) {
+                    discriminators[dKey] = new mongoose.Schema(dDef, { _id: false });
+                }
+                objDef[key] = {
+                    type: baseSchema,
+                    discriminators,
+                };
+            }
+            else {
+                objDef[key] = def;
+            }
+        }
+        else if (typeof def === 'object' && def !== null && !Array.isArray(def)) {
             const { includeId, ...cleanDef } = def;
             objDef[key] = cleanDef;
         }
@@ -475,12 +506,34 @@ function handleArray(unwrapped, mongooseProp, visited, extractMongooseDef) {
         : mongoose?.Schema.Types.Mixed || 'Mixed';
     // If no explicit type override, wrap the inner definition in an array
     if (!mongooseProp.type) {
-        const innerType = innerDef.type || innerDef;
-        mongooseProp.type = [innerType];
-        // Transfer any metadata from the inner type (like 'ref') to the array definition
-        if (typeof innerDef === 'object') {
-            Object.assign(mongooseProp, innerDef);
-            mongooseProp.type = [innerType]; // Restore type as array
+        if (innerDef && typeof innerDef === 'object' && innerDef.__isDiscriminatorUnion && mongoose) {
+            // const baseSchema =
+            // new mongoose.Schema(innerDef.baseDef, {
+            //   discriminatorKey: innerDef.discriminatorKey,
+            //   _id: false,
+            // });
+            const discriminators = {};
+            for (const [dKey, dDef] of Object.entries(innerDef.discriminators)) {
+                discriminators[dKey] = new mongoose.Schema(dDef, { _id: false });
+            }
+            mongooseProp.type = [
+                new mongoose.Schema({}, {
+                    discriminatorKey: innerDef.discriminatorKey,
+                    _id: false,
+                }),
+            ];
+            mongooseProp.discriminators = discriminators;
+        }
+        else {
+            const innerType = innerDef.type || innerDef;
+            mongooseProp.type = [innerType];
+            // Transfer any metadata from the inner type (like 'ref') to the array definition
+            if (typeof innerDef === 'object') {
+                // eslint-disable-next-line sonarjs/no-unused-vars
+                const { type: _extractedType, ...innerMeta } = innerDef;
+                Object.assign(mongooseProp, innerMeta);
+                mongooseProp.type = [innerType]; // Restore type as array
+            }
         }
     }
     callHookSync('schema:array:after', { schema: unwrapped, mongooseProp, innerDef });
@@ -511,7 +564,7 @@ function handleRecord(unwrapped, mongooseProp, visited, extractMongooseDef) {
  * THE CONVERTER (Safe AST Walker)
  * We extract the Zod type and merge it with any registered Mongoose metadata.
  */
-function extractMongooseDef(schema, visited = new Map()) {
+function extractMongooseDef(schema, visited = new Map(), isField = false) {
     // Only call converter:before at the very beginning of a run
     if (visited.size === 0) {
         callHookSync('converter:before', { schema: schema, visited });
@@ -552,12 +605,17 @@ function extractMongooseDef(schema, visited = new Map()) {
     }
     if (visited.has(unwrapped)) {
         const existing = visited.get(unwrapped);
+        if (existing === mongooseProp) {
+            return existing;
+        }
+        // console.log('Visited CACHE for', (unwrapped as any)._def.type, existing);
         if (Object.keys(meta).length > 0) {
             Object.assign(existing, mongooseProp);
         }
         return existing;
     }
     visited.set(unwrapped, mongooseProp);
+    // console.log('Visited set for', (unwrapped as any)._def.type, mongooseProp);
     if (features.default !== undefined) {
         mongooseProp.default = features.default;
     }
@@ -585,7 +643,8 @@ function extractMongooseDef(schema, visited = new Map()) {
     });
     // Handle recursion and specific types via separate handlers
     if (type === 'object') {
-        const result = handleObject(unwrapped, mongooseProp, visited, extractMongooseDef);
+        const wrapperFn = (s, v) => extractMongooseDef(s, v, true);
+        const result = handleObject(unwrapped, mongooseProp, visited, wrapperFn);
         callHookSync('converter:after', {
             schema: schema,
             mongooseProp: result,
@@ -596,15 +655,15 @@ function extractMongooseDef(schema, visited = new Map()) {
         return result;
     }
     if (type === 'array' || type === 'set' || type === 'tuple') {
-        handleArray(unwrapped, mongooseProp, visited, extractMongooseDef);
+        handleArray(unwrapped, mongooseProp, visited, (s, v) => extractMongooseDef(s, v, true));
     }
     if (type === 'record' || type === 'map') {
-        handleRecord(unwrapped, mongooseProp, visited, extractMongooseDef);
+        handleRecord(unwrapped, mongooseProp, visited, (s, v) => extractMongooseDef(s, v, true));
     }
     // Handle Intersections
     if (type === 'intersection') {
-        const left = extractMongooseDef(unwrapped._def.left, visited);
-        const right = extractMongooseDef(unwrapped._def.right, visited);
+        const left = extractMongooseDef(unwrapped._def.left, visited, isField);
+        const right = extractMongooseDef(unwrapped._def.right, visited, isField);
         if (typeof left === 'object' && typeof right === 'object') {
             Object.assign(mongooseProp, left, right);
         }
@@ -612,12 +671,255 @@ function extractMongooseDef(schema, visited = new Map()) {
             mongooseProp.type = getMongoose()?.Schema.Types.Mixed || 'Mixed';
         }
     }
-    // Handle Unions
     if ((type === 'union' ||
         type === 'discriminatedunion' ||
         type === 'discriminated_union' ||
-        type === 'literal') &&
+        type === 'xor') &&
         !mongooseProp.type) {
+        const mongoose = getMongoose();
+        const options = unwrapped.options || unwrapped._def.options;
+        const discriminatorKey = unwrapped._def.discriminator;
+        const unionCtx = {
+            isSimpleUnion: false,
+            isObjectUnion: false,
+            isXor: type === 'xor' ||
+                ((unwrapped._def?.inclusive === false ||
+                    schema._def?.inclusive === false) &&
+                    !discriminatorKey &&
+                    !schema._def?.discriminator),
+        };
+        if (Array.isArray(options) && options.length > 0) {
+            unionCtx.isSimpleUnion = options.every((opt) => {
+                const { type } = unwrapZodSchema(opt).schema._def;
+                return ['string', 'number', 'boolean', 'date', 'bigint', 'literal'].includes(type);
+            });
+            unionCtx.isObjectUnion = options.every((opt) => {
+                const { type } = unwrapZodSchema(opt).schema._def;
+                return type === 'object';
+            });
+        }
+        callHookSync('schema:union:before', { schema: unwrapped, mongooseProp, ctx: unionCtx });
+        if (discriminatorKey && unionCtx.isObjectUnion) {
+            const discriminators = {};
+            const allOptionDefs = [];
+            for (const option of options) {
+                const { schema: unwrappedOpt } = unwrapZodSchema(option);
+                const { shape } = unwrappedOpt._def;
+                const discriminatorProp = shape[discriminatorKey];
+                // Support both ZodLiteral and ZodOptional/ZodDefault/ZodNullable wrapped literals
+                const { schema: unwrappedDisc } = unwrapZodSchema(discriminatorProp);
+                const discriminatorValue = unwrappedDisc._def.value ?? unwrappedDisc._def.values?.[0];
+                // Use a fresh Map for each option to avoid cross-contamination of visited nodes
+                const optionDef = extractMongooseDef(option, new Map(), true);
+                if (optionDef && typeof optionDef === 'object' && !Array.isArray(optionDef)) {
+                    const cleanOptionDef = { ...optionDef };
+                    delete cleanOptionDef[discriminatorKey];
+                    discriminators[discriminatorValue] = cleanOptionDef;
+                    allOptionDefs.push(cleanOptionDef);
+                }
+            }
+            // Identify common fields present in ALL options to move to baseDef
+            const baseDef = {};
+            if (allOptionDefs.length > 0) {
+                const firstOption = allOptionDefs[0];
+                for (const key of Object.keys(firstOption)) {
+                    const isCommon = allOptionDefs.every((def) => {
+                        if (!(key in def))
+                            return false;
+                        // Simple check for equality of definitions (can be improved)
+                        return JSON.stringify(def[key]) === JSON.stringify(firstOption[key]);
+                    });
+                    if (isCommon) {
+                        baseDef[key] = firstOption[key];
+                        // Remove from discriminators to avoid duplication
+                        for (const def of allOptionDefs) {
+                            delete def[key];
+                        }
+                    }
+                }
+            }
+            const result = {
+                __isDiscriminatorUnion: true,
+                discriminatorKey,
+                discriminators,
+                baseDef,
+                validate: {
+                    validator(_v) {
+                        try {
+                            // Ensure we include the discriminator key in the object being validated
+                            const mongoose = getMongoose();
+                            const doc = mongoose && this instanceof mongoose.Document ? this.toObject() : this || {};
+                            schema.parse(doc);
+                            return true;
+                        }
+                        catch (err) {
+                            const message = err?.errors?.[0]?.message || err.message;
+                            if (this && typeof this.invalidate === 'function') {
+                                this.invalidate(discriminatorKey, `Zod validation failed: ${message}`);
+                            }
+                            return false;
+                        }
+                    },
+                    message: (props) => `Validation failed for ${props.path}`,
+                },
+            };
+            // If this is wrapped in a meta object, ensure we return the result properly
+            if (mongooseProp && typeof mongooseProp === 'object' && !Array.isArray(mongooseProp)) {
+                Object.assign(mongooseProp, result);
+                callHookSync('schema:union:after', {
+                    schema: unwrapped,
+                    mongooseProp,
+                    ctx: unionCtx,
+                });
+                return mongooseProp;
+            }
+            callHookSync('schema:union:after', {
+                schema: unwrapped,
+                mongooseProp: result,
+                ctx: unionCtx,
+            });
+            return result;
+        }
+        if (getMongoose()?.Schema.Types.Union &&
+            unionCtx.isSimpleUnion &&
+            options.length > 0 &&
+            !unionCtx.isXor) {
+            mongooseProp.type = mongoose.Schema.Types.Union;
+            mongooseProp.of = options.map((opt) => {
+                const def = extractMongooseDef(opt, visited, true);
+                return def.type || def;
+            });
+        }
+        else if (unionCtx.isObjectUnion && options.length > 0) {
+            // Merge all object properties into a single schema object
+            const mergedDef = {};
+            for (const opt of options) {
+                const def = extractMongooseDef(opt, new Map(), true);
+                if (typeof def === 'object' && def !== null) {
+                    for (const [key, prop] of Object.entries(def)) {
+                        if (typeof prop === 'object' && prop !== null && !Array.isArray(prop)) {
+                            prop.required = false;
+                        }
+                        if (mergedDef[key] &&
+                            typeof mergedDef[key] === 'object' &&
+                            typeof prop === 'object' &&
+                            !Array.isArray(mergedDef[key]) &&
+                            !Array.isArray(prop)) {
+                            const existingType = mergedDef[key].type ||
+                                mergedDef[key].instance ||
+                                (typeof mergedDef[key] === 'function' ? mergedDef[key] : null);
+                            const newType = prop.type ||
+                                prop.instance ||
+                                (typeof prop === 'function' ? prop : null);
+                            const isMixed = (t) => !t ||
+                                t === 'Mixed' ||
+                                t === 'SchemaMixed' ||
+                                t?.name === 'Mixed' ||
+                                t?.instance === 'Mixed' ||
+                                t?.name === 'SchemaMixed' ||
+                                t?.instance === 'SchemaMixed' ||
+                                (getMongoose()?.Schema.Types.Mixed &&
+                                    (t === getMongoose()?.Schema.Types.Mixed ||
+                                        t?.instance === 'Mixed' ||
+                                        t?.instance === 'SchemaMixed'));
+                            if (isMixed(existingType) && !isMixed(newType)) {
+                                mergedDef[key] = prop;
+                            }
+                            else if (!isMixed(existingType) && isMixed(newType)) ;
+                            else {
+                                Object.assign(mergedDef[key], prop);
+                            }
+                        }
+                        else if (!mergedDef[key] ||
+                            typeof mergedDef[key] !== 'object' ||
+                            Array.isArray(mergedDef[key])) {
+                            mergedDef[key] = prop;
+                        }
+                    }
+                }
+            }
+            if (isField && unionCtx.isXor) {
+                // For nested XOR, always use Mixed with validator to ensure mutual exclusivity
+                mongooseProp.type = mongoose?.Schema.Types.Mixed || 'Mixed';
+                mongooseProp.validate = {
+                    validator(v) {
+                        try {
+                            schema.parse(v);
+                            return true;
+                        }
+                        catch {
+                            return false;
+                        }
+                    },
+                    message: 'XOR validation failed',
+                };
+            }
+            else {
+                // For root or other object unions, merge properties
+                if (!mongooseProp.type ||
+                    mongooseProp.type === (getMongoose()?.Schema.Types.Mixed || 'Mixed')) {
+                    delete mongooseProp.type;
+                }
+                Object.assign(mongooseProp, mergedDef);
+                // If the object contains a 'type' property, Mongoose might misinterpret it as a field definition.
+                // We can hint that it's a nested object by using a Schema if 'type' is present along with other fields.
+                if (isField &&
+                    Object.prototype.hasOwnProperty.call(mongooseProp, 'type') &&
+                    Object.keys(mongooseProp).length > 1) {
+                    const mongooseInstance = getMongoose();
+                    if (mongooseInstance) {
+                        mongooseProp.type = new mongooseInstance.Schema(mongooseProp, { _id: false });
+                        for (const key of Object.keys(mongooseProp)) {
+                            if (key !== 'type')
+                                delete mongooseProp[key];
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            mongooseProp.type = mongoose?.Schema.Types.Mixed || 'Mixed';
+            if (isField &&
+                (type === 'xor' ||
+                    type === 'discriminated_union' ||
+                    type === 'discriminatedunion' ||
+                    type === 'union') &&
+                !mongooseProp.ref && // Skip Zod validation for populated fields
+                !Array.isArray(mongooseProp.type) && // Skip Zod validation for arrays
+                mongooseProp.type !== Map && // Skip Zod validation for maps
+                !mongooseProp.of // Skip Zod validation for collections
+            ) {
+                mongooseProp.validate = {
+                    validator(v) {
+                        try {
+                            schema.parse(v);
+                            return true;
+                        }
+                        catch (err) {
+                            return false;
+                        }
+                    },
+                    message: (props) => {
+                        if (unionCtx.isXor)
+                            return 'XOR validation failed';
+                        try {
+                            schema.parse(props.value);
+                        }
+                        catch (err) {
+                            return `Union validation failed: ${err.message}`;
+                        }
+                        return 'Union validation failed';
+                    },
+                };
+            }
+        }
+        callHookSync('schema:union:after', {
+            schema: unwrapped,
+            mongooseProp,
+            ctx: unionCtx,
+        });
+    }
+    if (type === 'literal' && !mongooseProp.type) {
         mongooseProp.type = getMongoose()?.Schema.Types.Mixed || 'Mixed';
     }
     // Handle Primitives
@@ -676,7 +978,7 @@ function extractMongooseDef(schema, visited = new Map()) {
     // Handle Lazy (Recursion Support)
     if (type === 'lazy') {
         const inner = def.getter();
-        const result = extractMongooseDef(inner, visited);
+        const result = extractMongooseDef(inner, visited, isField);
         if (Object.keys(meta).length > 0 && result !== mongooseProp) {
             if (typeof result === 'object' && !Array.isArray(result)) {
                 Object.assign(mongooseProp, result);
@@ -730,24 +1032,46 @@ function toMongooseSchema(schema, options) {
         ...(meta.discriminatorKey ? { discriminatorKey: meta.discriminatorKey } : {}),
         ...schemaOptions,
     };
-    let definition = extractMongooseDef(schema);
-    // Strip internal includeId metadata that might have leaked into the definition
-    if (typeof definition === 'object' && definition !== null) {
-        // If it's a top-level object, it might have metadata fields directly
-        const { includeId, ...cleanDefinition } = definition;
-        definition = cleanDefinition;
-        // Also clean any top-level field definitions
-        for (const value of Object.values(definition)) {
-            if (value && typeof value === 'object' && !Array.isArray(value)) {
-                delete value.includeId;
-            }
-        }
-    }
+    let definition = extractMongooseDef(schema, new Map(), false);
     const mongoose = getMongoose();
     if (!mongoose) {
         throw new Error('Mongoose must be installed to use toMongooseSchema. If you are in an ESM environment, ensure mongoose is loaded.');
     }
-    const mongooseSchema = new mongoose.Schema(definition, mergedOptions);
+    let mongooseSchema;
+    if (definition && typeof definition === 'object' && definition.__isDiscriminatorUnion) {
+        const { discriminatorKey, discriminators, baseDef, validate } = definition;
+        mongooseSchema = new mongoose.Schema(baseDef, {
+            ...mergedOptions,
+            discriminatorKey,
+        });
+        if (validate) {
+            if (!mongooseSchema.path(discriminatorKey)) {
+                mongooseSchema.add({ [discriminatorKey]: { type: String } });
+            }
+            mongooseSchema.path(discriminatorKey).validate(validate);
+        }
+        for (const [key, dDef] of Object.entries(discriminators)) {
+            if (mongooseSchema.discriminators && mongooseSchema.discriminators[key]) {
+                continue;
+            }
+            mongooseSchema.discriminator(key, new mongoose.Schema(dDef, { _id: false }));
+        }
+    }
+    else {
+        // Strip internal includeId metadata that might have leaked into the definition
+        if (typeof definition === 'object' && definition !== null) {
+            // If it's a top-level object, it might have metadata fields directly
+            const { includeId, ...cleanDefinition } = definition;
+            definition = cleanDefinition;
+            // Also clean any top-level field definitions
+            for (const value of Object.values(definition)) {
+                if (value && typeof value === 'object' && !Array.isArray(value)) {
+                    delete value.includeId;
+                }
+            }
+        }
+        mongooseSchema = new mongoose.Schema(definition, mergedOptions);
+    }
     // Apply plugins if provided in options
     if (plugins && Array.isArray(plugins)) {
         for (const plugin of plugins) {
@@ -817,17 +1141,7 @@ const genTimestampsSchema = (createdAtField = 'createdAt', updatedAtField = 'upd
     if (updatedAtField != null) {
         shape[updatedAtField] = withMongoose(DateFieldZod(), { index: true });
     }
-    const schema = v4.z.object(shape);
-    const meta = {
-        timestamps: {
-            createdAt: createdAtField == null ? false : createdAtField,
-            updatedAt: updatedAtField == null ? false : updatedAtField,
-        },
-    };
-    // Attach metadata to the instance if supported, but also register it
-    const schemaWithMeta = withMongoose(schema, meta);
-    schemaWithMeta.meta = () => meta;
-    return schemaWithMeta;
+    return shape;
 };
 const bufferMongooseGetter = (value) => value != null && value._bsontype === 'Binary' ? value.buffer : value;
 

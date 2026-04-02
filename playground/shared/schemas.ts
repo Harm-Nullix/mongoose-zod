@@ -21,10 +21,12 @@ export const UserZodSchema = z
       z.object({website: z.url().optional()}),
     ),
     // XOR example
-    contact: z.xor([
-      z.object({type: z.literal('phone'), phoneNumber: z.string()}),
-      z.object({type: z.literal('slack'), slackId: z.string()}),
-    ]).optional(),
+    contact: z
+      .xor([
+        z.object({type: z.literal('phone'), phoneNumber: z.string()}),
+        z.object({type: z.literal('slack'), slackId: z.string()}),
+      ])
+      .optional(),
   })
   .describe('User');
 
@@ -33,9 +35,13 @@ export type User = z.infer<typeof UserZodSchema>;
 // Discriminated Union example
 export const ActivityZodSchema = z
   .discriminatedUnion('type', [
-    z.object({type: z.literal('login'), timestamp: z.date()}),
-    z.object({type: z.literal('post_create'), postId: zObjectId(), timestamp: z.date()}),
-    z.object({type: z.literal('comment_create'), commentId: z.string(), timestamp: z.date()}),
+    z.object({type: z.literal('login'), timestamp: z.coerce.date()}),
+    z.object({type: z.literal('post_create'), postId: zObjectId(), timestamp: z.coerce.date()}),
+    z.object({
+      type: z.literal('comment_create'),
+      commentId: z.string(),
+      timestamp: z.coerce.date(),
+    }),
   ])
   .describe('Activity');
 
