@@ -1,3 +1,8 @@
+> [!CAUTION]
+> **This repository has been archived.** > Development has moved to a new location. Please use the link below for the latest updates and releases:
+> ### 🚀 [@nullix/zod-mongoose](https://github.com/Harm-Nullix/zod-mongoose)
+
+
 # mongoose-zod
 
 A library which allows to author [mongoose](https://github.com/Automattic/mongoose) ("a MongoDB object modeling tool") schemas using [zod](https://github.com/colinhacks/zod) ("a TypeScript-first schema declaration and validation library").
