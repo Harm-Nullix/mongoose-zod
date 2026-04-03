@@ -1,0 +1,48 @@
+{
+  "name": "@nullix/zod-mongoose-studio",
+  "version": "1.0.0",
+  "description": "Monaco-powered TypeScript playground for @nullix/zod-mongoose",
+  "main": "./nuxt.config.ts",
+  "bin": {
+    "zod-mongoose-studio": "./bin/index.mjs"
+  },
+  "type": "module",
+  "files": [
+    "app",
+    "server",
+    "bin",
+    "nuxt.config.ts",
+    ".output"
+  ],
+  "author": "harm@nullix.nl",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "nuxt build",
+    "prepublishOnly": "pnpm run build",
+    "publish": "bumpp && pnpm publish --access public",
+    "dev": "nuxt dev -p 34003",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@nullix/zod-mongoose": "workspace:*",
+    "esbuild": "0.28.0",
+    "get-port-please": "3.2.0",
+    "open": "11.0.0",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@nuxt/ui": "4.6.0",
+    "@types/node": "24.12.1",
+    "monaco-editor": "0.55.1",
+    "nuxt": "4.4.2",
+    "tailwindcss": "4.2.2",
+    "typescript": "5.9.3",
+    "vue": "3.5.32",
+    "vue-tsc": "3.2.6"
+  }
+}
